@@ -11,7 +11,10 @@ public class TimeEntryResponse {
 
     private Long id;
     private LocalDate date;
+    private Long clientId;
+    private String clientName;
     private Double hours;
+    private Double totalTaskHours;
     private String comment;
 
     private Long developerId;

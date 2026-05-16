@@ -1,62 +1,221 @@
 .worklog-table-shell {
+  flex: 1;
+  width: 100%;
   height: 100%;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
   border: 1px solid #e3e8ef;
   border-radius: 6px;
   background: #ffffff;
   overflow: hidden;
 }
 
+.worklog-toolbar {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-bottom: 1px solid #e5e9f0;
+  background: #fbfcfe;
+}
+
+.worklog-toolbar-title {
+  color: #344054;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.worklog-toolbar-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.worklog-toolbar-add,
+.worklog-toolbar-delete {
+  padding: 5px 8px;
+  border: 1px solid #d9dee7;
+  border-radius: 5px;
+  background: #fbfcfe;
+  color: #344054;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.worklog-toolbar-add:hover,
+.worklog-toolbar-delete:hover:not(:disabled) {
+  border-color: #b8c2d0;
+  background: #f2f4f7;
+}
+
+.worklog-toolbar-delete:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
 .worklog-table-scroll {
-  height: 100%;
+  flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
 }
 
 .worklog-table {
   width: 100%;
-  min-width: 720px;
+  min-width: 0;
+  height: 100%;
+  display: table;
   border-collapse: separate;
   border-spacing: 0;
   font-size: 13px;
+  table-layout: fixed;
+}
+
+.worklog-col-client,
+.worklog-col-task {
+  width: auto;
+}
+
+.worklog-col-hours,
+.worklog-col-total,
+.worklog-number-column {
+  width: 10%;
+}
+
+.worklog-col-client {
+  width: 18%;
+}
+
+.worklog-col-task {
+  width: 62%;
 }
 
 .worklog-table th,
 .worklog-table td {
-  padding: 8px 10px;
+  padding: 4px 8px;
   border-bottom: 1px solid #edf0f5;
   text-align: left;
   white-space: nowrap;
+  vertical-align: middle;
+  line-height: 1.12;
 }
 
 .worklog-table th {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  background: #f2f4f7;
-  color: #475467;
+  background: #dfe6ef;
+  color: #202c38;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 800;
+  letter-spacing: 0;
+  border-top: 1px solid #f6f8fb;
+  border-bottom: 2px solid #b7c1cf;
+  box-shadow: inset 0 1px 0 #f6f8fb;
+}
+
+.worklog-table thead,
+.worklog-table thead {
+  display: table-header-group;
+}
+
+.worklog-table tfoot {
+  display: table-footer-group;
+}
+
+.worklog-table tbody {
+  display: table-row-group;
+  vertical-align: top;
 }
 
 .worklog-table tbody tr:hover {
   background: #f8fafc;
 }
 
+.worklog-table tbody tr {
+  cursor: pointer;
+  height: auto;
+}
+
+.worklog-spacer-row {
+  height: 100%;
+}
+
+.worklog-spacer-row td {
+  padding: 0;
+  border: 0;
+  height: 100%;
+  line-height: 0;
+  cursor: default;
+}
+
+.worklog-table tbody tr.worklog-row-selected td {
+  background: #f7f4ee;
+  box-shadow: inset 0 1px 0 #e8ddd0, inset 0 -1px 0 #e8ddd0;
+}
+
+.worklog-table tbody tr.worklog-row-selected td:first-child {
+  box-shadow: inset 3px 0 0 #a58a68, inset 0 1px 0 #e8ddd0, inset 0 -1px 0 #e8ddd0;
+}
+
+.worklog-table tbody tr.worklog-row-editing td {
+  background: #f7f4ee;
+  box-shadow: inset 0 1px 0 #e8ddd0, inset 0 -1px 0 #e8ddd0;
+}
+
+.worklog-table tbody tr.worklog-row-editing td:first-child {
+  box-shadow: inset 3px 0 0 #a58a68, inset 0 1px 0 #e8ddd0, inset 0 -1px 0 #e8ddd0;
+}
+
+.worklog-table tbody tr.worklog-row-validation-error td {
+  background: #fdf7f4;
+  box-shadow: inset 0 1px 0 #eaded5, inset 0 -1px 0 #eaded5;
+}
+
+.worklog-table tbody tr.worklog-row-validation-error td:first-child {
+  box-shadow: inset 3px 0 0 #c78f6a, inset 0 1px 0 #eaded5, inset 0 -1px 0 #eaded5;
+}
+
 .worklog-table tfoot td {
   position: sticky;
   bottom: 0;
   z-index: 1;
-  border-top: 1px solid #d9dee7;
+  padding: 4px 8px;
+  border-top: 2px solid #b7c1cf;
   border-bottom: none;
-  background: #fbfcfe;
-  color: #1f2933;
-  font-weight: 700;
+  background: #dfe6ef;
+  color: #202c38;
+  font-weight: 800;
+  font-size: 12px;
+  letter-spacing: 0;
+  box-shadow: inset 0 1px 0 #ffffff;
+}
+
+.worklog-table tfoot tr.worklog-footer-limit-error td {
+  background: #fdf7f4;
+  border-top-color: #d8b7a3;
+  box-shadow: inset 0 1px 0 #fff4ec;
+}
+
+.worklog-table tfoot td:first-child {
+  color: #202c38;
 }
 
 .worklog-number-column {
-  width: 120px;
   text-align: right;
+  padding-right: 14px;
+}
+
+.worklog-table td.worklog-number-column,
+.worklog-table tfoot td.worklog-number-column,
+.worklog-table thead th.worklog-number-column {
+  text-align: right;
+  padding-right: 14px;
+}
+
+.worklog-number-column > .worklog-edit-ready,
+.worklog-number-column > .worklog-hours-input {
+  display: block;
+  margin-left: auto;
 }
 
 .worklog-client {
@@ -68,13 +227,267 @@
   color: #1f2933;
 }
 
-.worklog-edit-ready {
-  display: inline-flex;
-  justify-content: flex-end;
-  min-width: 58px;
-  padding: 3px 7px;
+.worklog-inline-text {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+.worklog-inline-text:disabled {
+  cursor: not-allowed;
+  color: #8792a2;
+  opacity: 1;
+}
+
+.worklog-inline-select {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  padding: 0 5px;
   border: 1px solid #d9dee7;
   border-radius: 5px;
   background: #ffffff;
+  color: #1f2933;
+  font: inherit;
   box-sizing: border-box;
+}
+
+.worklog-inline-select:disabled {
+  background: #f5f7fa;
+  color: #8b95a3;
+  cursor: not-allowed;
+}
+
+.worklog-inline-select:focus {
+  outline: 2px solid #d9e7fb;
+  outline-offset: 1px;
+}
+
+.worklog-edit-ready {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  padding: 1px 5px;
+  border: 1px solid #d9dee7;
+  border-radius: 5px;
+  background: #ffffff;
+  color: #1f2933;
+  font: inherit;
+  cursor: pointer;
+  box-sizing: border-box;
+  text-align: right;
+}
+
+.worklog-edit-ready:hover {
+  border-color: #b8c2d0;
+  background: #f8fafc;
+}
+
+.worklog-hours-input {
+  width: 100%;
+  min-width: 0;
+  padding: 1px 5px;
+  border: 1px solid #98a2b3;
+  border-radius: 5px;
+  background: #ffffff;
+  color: #1f2933;
+  font: inherit;
+  text-align: right;
+  box-sizing: border-box;
+}
+
+.worklog-hours-input:focus {
+  outline: 2px solid #d9e7fb;
+  outline-offset: 1px;
+}
+
+.tracking-summary-panel .tracking-panel-body {
+  display: flex;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0;
+}
+
+.monthly-summary-table-shell {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #e3e8ef;
+  border-radius: 6px;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.monthly-summary-table-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.monthly-summary-table {
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  display: table;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+  font-size: 13px;
+}
+
+.monthly-summary-col-date,
+.monthly-summary-col-weekday {
+  width: 18%;
+}
+
+.monthly-summary-col-hours {
+  width: 44%;
+}
+
+.monthly-summary-table th,
+.monthly-summary-table td {
+  padding: 4px 8px;
+  border-bottom: 1px solid #edf0f5;
+  text-align: left;
+  white-space: nowrap;
+  vertical-align: middle;
+  line-height: 1.12;
+}
+
+.monthly-summary-table th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #dfe6ef;
+  color: #202c38;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0;
+  border-top: 1px solid #f6f8fb;
+  border-bottom: 2px solid #b7c1cf;
+  box-shadow: inset 0 1px 0 #f6f8fb;
+}
+
+.monthly-summary-table tbody tr {
+  height: auto;
+}
+
+.monthly-summary-weekend-row td {
+  background: #f7f4ee;
+  color: #4f5b66;
+  box-shadow: inset 0 1px 0 #e8ddd0, inset 0 -1px 0 #e8ddd0;
+}
+
+.monthly-summary-weekend-row td:first-child {
+  box-shadow: inset 3px 0 0 #a58a68, inset 0 1px 0 #e8ddd0, inset 0 -1px 0 #e8ddd0;
+}
+
+.monthly-summary-number-column {
+  text-align: right;
+  padding-right: 14px;
+}
+
+.monthly-summary-table td.monthly-summary-number-column,
+.monthly-summary-table th.monthly-summary-number-column,
+.monthly-summary-table tfoot td.monthly-summary-number-column {
+  text-align: right;
+  padding-right: 14px;
+}
+
+.monthly-summary-table tfoot td {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  padding: 4px 8px;
+  border-top: 2px solid #b7c1cf;
+  border-bottom: none;
+  background: #dfe6ef;
+  color: #202c38;
+  font-weight: 800;
+  font-size: 12px;
+  letter-spacing: 0;
+  box-shadow: inset 0 1px 0 #ffffff;
+}
+
+.monthly-summary-footer-row td {
+  background: #dfe6ef;
+  color: #202c38;
+}
+
+.monthly-summary-footer-row td:first-child {
+  color: #202c38;
+}
+
+.task-details-panel {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+}
+
+.task-details-comment {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  padding: 12px;
+  border: 1px solid #e3e8ef;
+  border-radius: 6px;
+  background: #fbfcfe;
+  overflow: auto;
+  box-sizing: border-box;
+}
+
+.task-details-textarea {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #344054;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  resize: none;
+  outline: none;
+  box-sizing: border-box;
+  white-space: pre-wrap;
+  overflow: auto;
+}
+
+.task-details-textarea:disabled {
+  color: #9aa4b2;
+  cursor: default;
+}
+
+.task-details-empty {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 16px;
+  border: 1px dashed #cfd7e3;
+  border-radius: 6px;
+  background: #fbfcfe;
+  box-sizing: border-box;
+}
+
+.task-details-empty-title {
+  color: #344054;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.task-details-empty-text {
+  margin-top: 4px;
+  color: #667085;
+  font-size: 13px;
 }

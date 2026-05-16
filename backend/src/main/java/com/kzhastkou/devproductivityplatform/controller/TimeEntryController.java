@@ -1,12 +1,14 @@
 package com.kzhastkou.devproductivityplatform.controller;
 
+import com.kzhastkou.devproductivityplatform.dto.TimeEntryDayRequest;
 import com.kzhastkou.devproductivityplatform.dto.TimeEntryRequest;
 import com.kzhastkou.devproductivityplatform.dto.TimeEntryResponse;
-import com.kzhastkou.devproductivityplatform.entity.TimeEntry;
-import com.kzhastkou.devproductivityplatform.repository.TimeEntryRepository;
+import com.kzhastkou.devproductivityplatform.entity.Developer;
+import com.kzhastkou.devproductivityplatform.repository.DeveloperRepository;
 import com.kzhastkou.devproductivityplatform.service.TimeEntryService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
@@ -19,26 +21,32 @@ import java.util.List;
 public class TimeEntryController {
 
     private final TimeEntryService timeEntryService;
+    private final DeveloperRepository developerRepository;
 
     @PostMapping
     public TimeEntryResponse create(@Valid @RequestBody TimeEntryRequest request) {
-        Long userId = (Long) SecurityContextHolder.getContext()
-                .getAuthentication()
-                .getPrincipal();
+        return timeEntryService.create(request, resolveCurrentUserId());
+    }
 
-        return timeEntryService.create(request, userId);
+    @GetMapping
+    public List<TimeEntryResponse> getByDate(@RequestParam LocalDate date) {
+        return timeEntryService.getByDate(date, resolveCurrentUserId());
+    }
+
+    @GetMapping("/month")
+    public List<TimeEntryResponse> getByMonth(@RequestParam int year, @RequestParam int month) {
+        return timeEntryService.getByMonth(year, month, resolveCurrentUserId());
+    }
+
+    @PutMapping("/day")
+    public List<TimeEntryResponse> saveDay(@RequestParam LocalDate date,
+                                           @Valid @RequestBody List<@Valid TimeEntryDayRequest> entries) {
+        return timeEntryService.saveDay(date, entries, resolveCurrentUserId());
     }
 
     @GetMapping("/my")
     public List<TimeEntryResponse> getMyEntries() {
-
-        System.out.println("AUTH: " + SecurityContextHolder.getContext().getAuthentication());
-
-        Long userId = (Long) SecurityContextHolder.getContext()
-                .getAuthentication()
-                .getPrincipal();
-
-        return timeEntryService.getByDeveloper(userId);
+        return timeEntryService.getByDeveloper(resolveCurrentUserId());
     }
 
     @DeleteMapping("/{id}")
@@ -49,11 +57,19 @@ public class TimeEntryController {
     @PutMapping("/{id}")
     public TimeEntryResponse update(@PathVariable Long id,
                                     @RequestBody TimeEntryRequest request) {
+        return timeEntryService.update(id, request, resolveCurrentUserId());
+    }
 
-        Long userId = (Long) SecurityContextHolder.getContext()
-                .getAuthentication()
-                .getPrincipal();
+    private Long resolveCurrentUserId() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        Object principal = authentication != null ? authentication.getPrincipal() : null;
 
-        return timeEntryService.update(id, request, userId);
+        if (principal instanceof Long userId) {
+            return userId;
+        }
+
+        return developerRepository.findFirstByOrderByIdAsc()
+                .map(Developer::getId)
+                .orElseThrow(() -> new IllegalStateException("No developer available for time tracking"));
     }
 }

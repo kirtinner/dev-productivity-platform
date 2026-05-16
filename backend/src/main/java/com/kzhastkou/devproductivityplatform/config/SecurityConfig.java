@@ -4,6 +4,7 @@ import com.kzhastkou.devproductivityplatform.security.JwtFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.web.SecurityFilterChain;
 
@@ -19,7 +20,12 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .cors(cors -> {})
                 .authorizeHttpRequests(auth -> auth
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/tasks/my").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/time-entries").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/time-entries/month").permitAll()
+                        .requestMatchers(HttpMethod.PUT, "/api/time-entries/day").permitAll()
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtFilter,
