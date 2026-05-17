@@ -22,9 +22,14 @@ function mapTimeEntry(entry) {
 function mapTask(task) {
     return {
         id: task.id,
-        name: task.name,
+        name: task.name ?? task.shortName ?? task.fullName ?? "",
+        shortName: task.shortName ?? "",
+        fullName: task.fullName ?? task.name ?? "",
         clientId: task.clientId ?? task.client?.id ?? null,
-        clientName: task.clientName ?? task.client?.shortName ?? task.client?.fullName ?? ""
+        clientName: task.clientName ?? task.client?.shortName ?? task.client?.fullName ?? "",
+        organizationId: task.organizationId ?? null,
+        projectId: task.projectId ?? null,
+        softwareProductId: task.softwareProductId ?? null
     };
 }
 

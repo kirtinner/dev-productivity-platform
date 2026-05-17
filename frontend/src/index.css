@@ -545,6 +545,36 @@ select {
   box-sizing: border-box;
 }
 
+.tasks-filter-bar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 12px 14px;
+  flex-wrap: wrap;
+  width: 100%;
+  min-width: 0;
+  margin-bottom: 14px;
+  padding: 10px 14px;
+  border: 1px solid #dfe4ec;
+  border-radius: 8px;
+  background: #f3efe7;
+  box-shadow: 0 1px 3px rgba(16, 24, 40, 0.06);
+  box-sizing: border-box;
+}
+
+.tasks-filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  flex: 0 1 260px;
+}
+
+.tasks-filter-select {
+  width: min(320px, 100%);
+  min-width: 220px;
+}
+
 .projects-filter-bar .clients-filter-label {
   flex: 0 0 auto;
 }
@@ -1041,6 +1071,10 @@ select {
   width: min(420px, 100%);
 }
 
+.tracking-modal-settings {
+  width: min(760px, 100%);
+}
+
 .tracking-modal-header {
   padding: 12px 14px 10px;
   border-bottom: 1px solid #e5e9f0;
@@ -1105,6 +1139,11 @@ select {
   gap: 10px;
 }
 
+.tracking-modal-settings-stack {
+  display: grid;
+  gap: 12px;
+}
+
 .tracking-modal-error {
   margin-top: 10px;
   color: #8a3b3b;
@@ -1144,6 +1183,83 @@ select {
 
 .tracking-modal-button-secondary {
   background: #ffffff;
+}
+
+.tracking-modal-task-editor {
+  width: min(980px, 100%);
+}
+
+.tracking-modal-task-editor .tracking-modal-body {
+  max-height: calc(100vh - 180px);
+  overflow: auto;
+}
+
+.tasks-editor-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 12px;
+  align-items: start;
+}
+
+.tasks-editor-field {
+  min-width: 0;
+}
+
+.tasks-editor-field input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  align-self: center;
+}
+
+.tasks-editor-field-checkbox {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.tasks-editor-field-full {
+  grid-column: 1 / -1;
+}
+
+.tasks-editor-field-full textarea {
+  min-height: 74px;
+  resize: vertical;
+}
+
+.tasks-table {
+  table-layout: fixed;
+  width: 100%;
+}
+
+.tasks-col-completed {
+  width: 8%;
+}
+
+.tasks-col-date {
+  width: 12%;
+}
+
+.tasks-col-number {
+  width: 14%;
+}
+
+.tasks-col-client {
+  width: 16%;
+}
+
+.tasks-col-name {
+  width: 24%;
+}
+
+.tasks-col-hours {
+  width: 10%;
+}
+
+.tasks-col-software {
+  width: 16%;
 }
 
 @media (max-width: 900px) {

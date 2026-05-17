@@ -8,6 +8,7 @@ import ReportsPage from "./pages/ReportsPage";
 import TasksPage from "./pages/TasksPage";
 import TimeTrackingPage from "./pages/TimeTrackingPage";
 import { getOrganizations } from "./services/organizationsService";
+import { getSoftwareProducts } from "./services/softwareProductsService";
 
 function App() {
     const [isAuth, setIsAuth] = useState(!!localStorage.getItem("token"));
@@ -15,13 +16,17 @@ function App() {
     const [settingsOpenRequest, setSettingsOpenRequest] = useState(0);
     const [organizations, setOrganizations] = useState([]);
     const [currentOrganizationId, setCurrentOrganizationId] = useState(null);
+    const [softwareProducts, setSoftwareProducts] = useState([]);
 
     useEffect(() => {
         let active = true;
 
-        async function loadOrganizations() {
+        async function loadOrganizationsAndSettings() {
             try {
-                const nextOrganizations = await getOrganizations();
+                const [nextOrganizations, nextSoftwareProducts] = await Promise.all([
+                    getOrganizations(),
+                    getSoftwareProducts()
+                ]);
 
                 if (!active) {
                     return;
@@ -29,6 +34,7 @@ function App() {
 
                 setOrganizations(nextOrganizations);
                 setCurrentOrganizationId(current => current ?? nextOrganizations[0]?.id ?? null);
+                setSoftwareProducts(nextSoftwareProducts);
             } catch {
                 if (!active) {
                     return;
@@ -36,7 +42,7 @@ function App() {
             }
         }
 
-        loadOrganizations();
+        loadOrganizationsAndSettings();
 
         return () => {
             active = false;
@@ -61,8 +67,10 @@ function App() {
                     <TimeTrackingPage
                         settingsOpenRequest={settingsOpenRequest}
                         organizations={organizations}
+                        softwareProducts={softwareProducts}
                         currentOrganizationId={currentOrganizationId}
                         onCurrentOrganizationChange={setCurrentOrganizationId}
+                        onSoftwareProductsChange={setSoftwareProducts}
                     />
                 );
             case "reports":
@@ -84,7 +92,14 @@ function App() {
                     />
                 );
             case "tasks":
-                return <TasksPage />;
+                return (
+                    <TasksPage
+                        key={currentOrganizationId ?? "tasks"}
+                        organizations={organizations}
+                        currentOrganizationId={currentOrganizationId}
+                        softwareProducts={softwareProducts}
+                    />
+                );
             case "organizations":
                 return <OrganizationsPage />;
             default:
@@ -92,8 +107,10 @@ function App() {
                     <TimeTrackingPage
                         settingsOpenRequest={settingsOpenRequest}
                         organizations={organizations}
+                        softwareProducts={softwareProducts}
                         currentOrganizationId={currentOrganizationId}
                         onCurrentOrganizationChange={setCurrentOrganizationId}
+                        onSoftwareProductsChange={setSoftwareProducts}
                     />
                 );
         }
