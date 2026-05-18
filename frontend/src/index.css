@@ -599,6 +599,39 @@ select {
   justify-self: end;
 }
 
+.settings-page-stack {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 14px;
+}
+
+.settings-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(220px, 320px));
+  gap: 12px;
+  align-items: end;
+}
+
+.settings-section-shell {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.settings-section-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  gap: 12px;
+  align-items: start;
+}
+
+.settings-inline-status {
+  margin: 0;
+}
+
 @media (max-width: 700px) {
   .calendar-grid {
     grid-template-columns: repeat(7, minmax(38px, 1fr));

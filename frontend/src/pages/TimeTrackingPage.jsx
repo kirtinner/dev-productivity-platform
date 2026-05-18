@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import MonthlySummaryTable from "../components/MonthlySummaryTable";
-import SoftwareProductsSettingsTable from "../components/SoftwareProductsSettingsTable";
 import TaskDetailsPanel from "../components/TaskDetailsPanel";
 import WorklogEntriesTable from "../components/WorklogEntriesTable";
 import { createLocalWorklogEntry } from "../utils/timeTrackingEntries";
@@ -80,12 +79,7 @@ function getEntryModifiedState(nextEntry, originalEntry) {
 }
 
 export default function TimeTrackingPage({
-    settingsOpenRequest = 0,
-    organizations = [],
-    softwareProducts = [],
-    currentOrganizationId = null,
-    onCurrentOrganizationChange = () => {},
-    onSoftwareProductsChange = () => {}
+    userSettings = { currentOrganizationId: null, dailyHoursLimit: 8 }
 }) {
     const today = new Date();
 
@@ -101,12 +95,6 @@ export default function TimeTrackingPage({
     const [editingEntryIsNew, setEditingEntryIsNew] = useState(false);
     const [editingFallbackSelectionId, setEditingFallbackSelectionId] = useState(null);
     const [localIdSeed, setLocalIdSeed] = useState(1);
-    const [dailyHoursLimit, setDailyHoursLimit] = useState(16);
-    const [settingsOpen, setSettingsOpen] = useState(false);
-    const [settingsDraftLimit, setSettingsDraftLimit] = useState("16");
-    const [settingsDraftOrganizationId, setSettingsDraftOrganizationId] = useState("");
-    const [settingsDraftSoftwareProducts, setSettingsDraftSoftwareProducts] = useState([]);
-    const [settingsError, setSettingsError] = useState("");
     const [pendingSelectionId, setPendingSelectionId] = useState(null);
     const [switchDialogOpen, setSwitchDialogOpen] = useState(false);
     const [pendingDateSelection, setPendingDateSelection] = useState(null);
@@ -116,8 +104,8 @@ export default function TimeTrackingPage({
     const [apiErrorMessage, setApiErrorMessage] = useState("");
     const selectedDateRef = useRef(selectedDate);
     const cancelEntryEditRef = useRef(() => {});
-    const settingsOpenRequestRef = useRef(settingsOpenRequest);
 
+    const dailyHoursLimit = Number(userSettings.dailyHoursLimit ?? 8);
     const calendarDays = buildCalendarDays(selectedMonth, selectedYear);
     const selectedMonthLabel = formatMonthYear(selectedMonth, selectedYear);
     const filteredEntries = entries.filter(entry => entry.date === selectedDate);
@@ -584,36 +572,6 @@ export default function TimeTrackingPage({
         }
     };
 
-    const handleApplySettings = () => {
-        const parsedLimit = Number(settingsDraftLimit);
-
-        if (!Number.isFinite(parsedLimit) || parsedLimit <= 0) {
-            setSettingsError("Daily hours limit must be greater than 0.");
-            return;
-        }
-
-        setDailyHoursLimit(parsedLimit);
-        if (settingsDraftOrganizationId !== "") {
-            onCurrentOrganizationChange(Number(settingsDraftOrganizationId));
-        }
-        onSoftwareProductsChange(settingsDraftSoftwareProducts.map(product => ({ ...product })));
-        setSettingsOpen(false);
-        setSettingsError("");
-    };
-
-    useEffect(() => {
-        if (settingsOpenRequest === settingsOpenRequestRef.current) {
-            return;
-        }
-
-        settingsOpenRequestRef.current = settingsOpenRequest;
-        setSettingsDraftLimit(String(dailyHoursLimit));
-        setSettingsDraftOrganizationId(String(currentOrganizationId ?? organizations[0]?.id ?? ""));
-        setSettingsDraftSoftwareProducts(softwareProducts.map(product => ({ ...product })));
-        setSettingsError("");
-        setSettingsOpen(true);
-    }, [currentOrganizationId, dailyHoursLimit, organizations, settingsOpenRequest, softwareProducts]);
-
     const handleConfirmDateSwitch = () => {
         if (!pendingDateSelection) {
             setDateSwitchConfirmOpen(false);
@@ -696,7 +654,6 @@ export default function TimeTrackingPage({
     useEffect(() => {
         if (
             editingEntryId == null ||
-            settingsOpen ||
             validationDialogOpen ||
             dateSwitchConfirmOpen ||
             switchDialogOpen
@@ -718,7 +675,6 @@ export default function TimeTrackingPage({
     }, [
         dateSwitchConfirmOpen,
         editingEntryId,
-        settingsOpen,
         switchDialogOpen,
         validationDialogOpen
     ]);
@@ -846,73 +802,6 @@ export default function TimeTrackingPage({
                     </PlaceholderPanel>
                 </div>
             </div>
-
-            {settingsOpen && (
-                <div className="tracking-modal-overlay" role="presentation">
-                    <div
-                        className="tracking-modal tracking-modal-settings"
-                        role="dialog"
-                        aria-modal="true"
-                        aria-labelledby="tracking-settings-title"
-                    >
-                        <div className="tracking-modal-header">
-                            <h3 id="tracking-settings-title">Settings</h3>
-                        </div>
-                        <div className="tracking-modal-body">
-                            <div className="tracking-modal-settings-stack">
-                                <div className="tracking-modal-fields">
-                                    <label className="tracking-modal-field">
-                                        <span>Daily hours limit</span>
-                                        <input
-                                            type="number"
-                                            min="0"
-                                            step="0.25"
-                                            value={settingsDraftLimit}
-                                            onChange={event => setSettingsDraftLimit(event.target.value)}
-                                        />
-                                    </label>
-                                    <label className="tracking-modal-field">
-                                        <span>Current Organization</span>
-                                        <select
-                                            value={settingsDraftOrganizationId}
-                                            onChange={event => setSettingsDraftOrganizationId(event.target.value)}
-                                        >
-                                            <option value="">Select organization</option>
-                                            {organizations.map(organization => (
-                                                <option key={organization.id} value={String(organization.id)}>
-                                                    {organization.shortName} - {organization.fullName}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </label>
-                                </div>
-                                <SoftwareProductsSettingsTable
-                                    softwareProducts={settingsDraftSoftwareProducts}
-                                    onSoftwareProductsChange={setSettingsDraftSoftwareProducts}
-                                />
-                                {settingsError ? (
-                                    <div className="tracking-modal-error">{settingsError}</div>
-                                ) : null}
-                            </div>
-                        </div>
-                        <div className="tracking-modal-actions">
-                            <button type="button" className="tracking-modal-button" onClick={handleApplySettings}>
-                                Apply
-                            </button>
-                            <button
-                                type="button"
-                                className="tracking-modal-button tracking-modal-button-secondary"
-                                onClick={() => {
-                                    setSettingsOpen(false);
-                                    setSettingsError("");
-                                }}
-                            >
-                                Cancel
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
 
             {validationDialogOpen && (
                 <div className="tracking-modal-overlay" role="presentation">

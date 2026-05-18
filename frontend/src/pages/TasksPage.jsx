@@ -1,15 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getClients as loadClients } from "../services/clientsService";
 import { getProjects as loadProjects } from "../services/projectsService";
-import { getTasks as loadTasks } from "../services/tasksService";
+import {
+    createTask as apiCreateTask,
+    deleteTask as apiDeleteTask,
+    getTasks as loadTasks,
+    updateTask as apiUpdateTask
+} from "../services/tasksService";
 
 function todayIso() {
     return new Date().toISOString().slice(0, 10);
 }
 
-function createTaskDraft(nextId, context, softwareProducts) {
+function createTaskDraft(context) {
     return {
-        id: nextId,
+        id: null,
         completed: false,
         created_at: todayIso(),
         task_number: "",
@@ -17,15 +22,11 @@ function createTaskDraft(nextId, context, softwareProducts) {
         description: "",
         implementation_details: "",
         estimated_hours: 0,
-        softwareProductId: softwareProducts[0]?.id ?? null,
+        softwareProductId: null,
         organizationId: context.organizationId ?? null,
         clientId: context.clientId ?? null,
         projectId: context.projectId ?? null
     };
-}
-
-function isTaskLinkedInSystem(task) {
-    return task.id === 1001 || task.task_number === "TASK-1001";
 }
 
 function validateTask(task, softwareProducts) {
@@ -78,11 +79,15 @@ function formatDate(value) {
 }
 
 function resolveSoftwareProductLabel(softwareProducts, softwareProductId) {
-    return softwareProducts.find(product => product.id === softwareProductId)?.shortName ?? "";
+    return softwareProducts.find(product => sameId(product.id, softwareProductId))?.shortName ?? "";
 }
 
 function resolveClientLabel(clients, clientId) {
-    return clients.find(client => client.id === clientId)?.shortName ?? "";
+    return clients.find(client => sameId(client.id, clientId))?.shortName ?? "";
+}
+
+function sameId(left, right) {
+    return left != null && right != null && String(left) === String(right);
 }
 
 export default function TasksPage({
@@ -108,19 +113,18 @@ export default function TasksPage({
     const [warningDialogOpen, setWarningDialogOpen] = useState(false);
     const [warningMessage, setWarningMessage] = useState("");
     const [switchDialogOpen, setSwitchDialogOpen] = useState(false);
-    const [nextId, setNextId] = useState(1007);
     const handleCancelRef = useRef(() => {});
 
     const filteredTasks = useMemo(
         () => tasks.filter(task =>
-            task.organizationId === selectedOrganizationId
-            && task.clientId === selectedClientId
-            && task.projectId === selectedProjectId
+            sameId(task.organizationId, selectedOrganizationId)
+            && sameId(task.clientId, selectedClientId)
+            && sameId(task.projectId, selectedProjectId)
         ),
         [tasks, selectedClientId, selectedOrganizationId, selectedProjectId]
     );
 
-    const selectedTask = tasks.find(task => task.id === selectedTaskId) ?? null;
+    const selectedTask = tasks.find(task => sameId(task.id, selectedTaskId)) ?? null;
     const isDraftDirty = editorOpen && draftTask && originalDraftTask && (
         draftTask.completed !== originalDraftTask.completed
         || draftTask.created_at !== originalDraftTask.created_at
@@ -154,20 +158,19 @@ export default function TasksPage({
                 setClients(nextClients);
                 setProjects(nextProjects);
                 setTasks(nextTasks);
-                setNextId(Math.max(...nextTasks.map(task => task.id), 1006) + 1);
 
                 const initialOrganizationId = currentOrganizationId ?? organizations[0]?.id ?? nextClients[0]?.organizationId ?? null;
-                const initialClients = nextClients.filter(client => client.organizationId === initialOrganizationId);
+                const initialClients = nextClients.filter(client => sameId(client.organizationId, initialOrganizationId));
                 const initialClientId = initialClients[0]?.id ?? null;
                 const initialProjects = nextProjects.filter(project =>
-                    project.organizationId === initialOrganizationId
-                    && project.clientId === initialClientId
+                    sameId(project.organizationId, initialOrganizationId)
+                    && sameId(project.clientId, initialClientId)
                 );
                 const initialProjectId = initialProjects[0]?.id ?? null;
                 const initialTaskId = nextTasks.find(task =>
-                    task.organizationId === initialOrganizationId
-                    && task.clientId === initialClientId
-                    && task.projectId === initialProjectId
+                    sameId(task.organizationId, initialOrganizationId)
+                    && sameId(task.clientId, initialClientId)
+                    && sameId(task.projectId, initialProjectId)
                 )?.id ?? null;
 
                 setSelectedOrganizationId(initialOrganizationId);
@@ -207,16 +210,16 @@ export default function TasksPage({
     }, [closeTransientDialogs]);
 
     const getContextDefaults = (organizationId, clientId = null, projectId = null) => {
-        const nextOrganizationClients = clients.filter(client => client.organizationId === organizationId);
-        const resolvedClientId = clientId != null && nextOrganizationClients.some(client => client.id === clientId)
+        const nextOrganizationClients = clients.filter(client => sameId(client.organizationId, organizationId));
+        const resolvedClientId = clientId != null && nextOrganizationClients.some(client => sameId(client.id, clientId))
             ? clientId
             : nextOrganizationClients[0]?.id ?? null;
 
         const nextProjects = projects.filter(project =>
-            project.organizationId === organizationId
-            && project.clientId === resolvedClientId
+            sameId(project.organizationId, organizationId)
+            && sameId(project.clientId, resolvedClientId)
         );
-        const resolvedProjectId = projectId != null && nextProjects.some(project => project.id === projectId)
+        const resolvedProjectId = projectId != null && nextProjects.some(project => sameId(project.id, projectId))
             ? projectId
             : nextProjects[0]?.id ?? null;
 
@@ -230,15 +233,21 @@ export default function TasksPage({
     const openEditorForExisting = (task) => {
         setEditorOpen(true);
         setEditorMode("edit");
-        setDraftTask({ ...task });
-        setOriginalDraftTask({ ...task });
+        setDraftTask({
+            ...task,
+            softwareProductId: task.softwareProductId ?? null
+        });
+        setOriginalDraftTask({
+            ...task,
+            softwareProductId: task.softwareProductId ?? null
+        });
         setSelectedTaskId(task.id);
         closeTransientDialogs();
     };
 
     const openEditorForNew = () => {
         const defaults = getContextDefaults(selectedOrganizationId, selectedClientId, selectedProjectId);
-        const nextDraft = createTaskDraft(nextId, defaults, softwareProducts);
+        const nextDraft = createTaskDraft(defaults);
 
         setEditorOpen(true);
         setEditorMode("add");
@@ -254,9 +263,9 @@ export default function TasksPage({
         setSelectedProjectId(defaults.projectId);
         setSelectedTaskId(
             tasks.find(task =>
-                task.organizationId === defaults.organizationId
-                && task.clientId === defaults.clientId
-                && task.projectId === defaults.projectId
+                sameId(task.organizationId, defaults.organizationId)
+                && sameId(task.clientId, defaults.clientId)
+                && sameId(task.projectId, defaults.projectId)
             )?.id ?? null
         );
     };
@@ -306,21 +315,26 @@ export default function TasksPage({
         }
     };
 
-    const handleDeleteTask = () => {
+    const handleDeleteTask = async () => {
         if (!selectedTask || editorOpen) {
             return;
         }
 
-        if (isTaskLinkedInSystem(selectedTask)) {
-            setWarningMessage("Task is used in the system and cannot be deleted.");
+        try {
+            await apiDeleteTask(selectedTask.id);
+            setTasks(currentTasks => currentTasks.filter(task => task.id !== selectedTask.id));
+            const remaining = filteredTasks.filter(task => task.id !== selectedTask.id);
+            setSelectedTaskId(remaining[0]?.id ?? null);
+            closeTransientDialogs();
+        } catch (error) {
+            const message =
+                error?.response?.data?.message ??
+                error?.response?.data?.error ??
+                error?.message ??
+                "Task is used in the system and cannot be deleted.";
+            setWarningMessage(message);
             setWarningDialogOpen(true);
-            return;
         }
-
-        setTasks(currentTasks => currentTasks.filter(task => task.id !== selectedTask.id));
-        const remaining = filteredTasks.filter(task => task.id !== selectedTask.id);
-        setSelectedTaskId(remaining[0]?.id ?? null);
-        closeTransientDialogs();
     };
 
     const handleDraftChange = (field, value) => {
@@ -365,8 +379,8 @@ export default function TasksPage({
         }
 
         const nextProjects = projects.filter(project =>
-            project.organizationId === draftTask.organizationId
-            && project.clientId === parsedClientId
+            sameId(project.organizationId, draftTask.organizationId)
+            && sameId(project.clientId, parsedClientId)
         );
 
         setDraftTask(current => (current ? {
@@ -449,16 +463,16 @@ export default function TasksPage({
         }
 
         const nextProjects = projects.filter(project =>
-            project.organizationId === selectedOrganizationId
-            && project.clientId === parsedClientId
+            sameId(project.organizationId, selectedOrganizationId)
+            && sameId(project.clientId, parsedClientId)
         );
 
         setSelectedClientId(parsedClientId);
         setSelectedProjectId(nextProjects[0]?.id ?? null);
         setSelectedTaskId(tasks.find(task =>
-            task.organizationId === selectedOrganizationId
-            && task.clientId === parsedClientId
-            && task.projectId === nextProjects[0]?.id
+            sameId(task.organizationId, selectedOrganizationId)
+            && sameId(task.clientId, parsedClientId)
+            && sameId(task.projectId, nextProjects[0]?.id)
         )?.id ?? null);
         closeTransientDialogs();
     };
@@ -482,14 +496,14 @@ export default function TasksPage({
 
         setSelectedProjectId(parsedProjectId);
         setSelectedTaskId(tasks.find(task =>
-            task.organizationId === selectedOrganizationId
-            && task.clientId === selectedClientId
-            && task.projectId === parsedProjectId
+            sameId(task.organizationId, selectedOrganizationId)
+            && sameId(task.clientId, selectedClientId)
+            && sameId(task.projectId, parsedProjectId)
         )?.id ?? null);
         closeTransientDialogs();
     };
 
-    const handleSaveTask = () => {
+    const handleSaveTask = async () => {
         if (!draftTask) {
             return;
         }
@@ -501,27 +515,37 @@ export default function TasksPage({
             return;
         }
 
-        if (editorMode === "add") {
-            const nextTask = {
+        try {
+            const isNewTask = editorMode === "add";
+            const savedTask = isNewTask
+                ? await apiCreateTask(draftTask)
+                : await apiUpdateTask(draftTask.id, draftTask);
+            const normalizedTask = {
                 ...draftTask,
-                id: nextId
+                ...savedTask,
+                softwareProductId: draftTask.softwareProductId ?? savedTask.softwareProductId ?? null
             };
 
-            setTasks(currentTasks => [...currentTasks, nextTask]);
-            setSelectedTaskId(nextTask.id);
-            setNextId(currentId => currentId + 1);
-        } else {
             setTasks(currentTasks =>
-                currentTasks.map(task =>
-                    task.id === draftTask.id
-                        ? { ...draftTask }
-                        : task
-                )
+                isNewTask
+                    ? [...currentTasks, normalizedTask]
+                    : currentTasks.map(task =>
+                        sameId(task.id, draftTask.id)
+                            ? normalizedTask
+                            : task
+                    )
             );
-            setSelectedTaskId(draftTask.id);
+            setSelectedTaskId(normalizedTask.id);
+            closeEditor();
+        } catch (error) {
+            const message =
+                error?.response?.data?.message ??
+                error?.response?.data?.error ??
+                error?.message ??
+                "Unable to save task.";
+            setWarningMessage(message);
+            setWarningDialogOpen(true);
         }
-
-        closeEditor();
     };
 
     const handleCancelTask = () => {
@@ -532,7 +556,7 @@ export default function TasksPage({
         closeEditor();
     };
 
-    const handleSaveFromSwitchDialog = () => {
+    const handleSaveFromSwitchDialog = async () => {
         if (!draftTask) {
             return;
         }
@@ -544,41 +568,52 @@ export default function TasksPage({
             return;
         }
 
-        if (editorMode === "add") {
-            const nextTask = {
+        try {
+            const isNewTask = editorMode === "add";
+            const savedTask = isNewTask
+                ? await apiCreateTask(draftTask)
+                : await apiUpdateTask(draftTask.id, draftTask);
+            const normalizedTask = {
                 ...draftTask,
-                id: nextId
+                ...savedTask,
+                softwareProductId: draftTask.softwareProductId ?? savedTask.softwareProductId ?? null
             };
 
-            setTasks(currentTasks => [...currentTasks, nextTask]);
-            setSelectedTaskId(pendingSelectionId ?? nextTask.id);
-            setNextId(currentId => currentId + 1);
-        } else {
             setTasks(currentTasks =>
-                currentTasks.map(task =>
-                    task.id === draftTask.id
-                        ? { ...draftTask }
-                        : task
-                )
+                isNewTask
+                    ? [...currentTasks, normalizedTask]
+                    : currentTasks.map(task =>
+                        sameId(task.id, draftTask.id)
+                            ? normalizedTask
+                            : task
+                    )
             );
-            setSelectedTaskId(pendingSelectionId ?? draftTask.id);
-        }
+            setSelectedTaskId(pendingSelectionId ?? normalizedTask.id);
 
-        if (pendingFilterSelection != null) {
-            applyFilterSelection(
-                pendingFilterSelection.organizationId,
-                pendingFilterSelection.clientId,
-                pendingFilterSelection.projectId
-            );
-        }
+            if (pendingFilterSelection != null) {
+                applyFilterSelection(
+                    pendingFilterSelection.organizationId,
+                    pendingFilterSelection.clientId,
+                    pendingFilterSelection.projectId
+                );
+            }
 
-        setEditorOpen(false);
-        setEditorMode(null);
-        setDraftTask(null);
-        setOriginalDraftTask(null);
-        setSwitchDialogOpen(false);
-        setPendingSelectionId(null);
-        setPendingFilterSelection(null);
+            setEditorOpen(false);
+            setEditorMode(null);
+            setDraftTask(null);
+            setOriginalDraftTask(null);
+            setSwitchDialogOpen(false);
+            setPendingSelectionId(null);
+            setPendingFilterSelection(null);
+        } catch (error) {
+            const message =
+                error?.response?.data?.message ??
+                error?.response?.data?.error ??
+                error?.message ??
+                "Unable to save task.";
+            setWarningMessage(message);
+            setWarningDialogOpen(true);
+        }
     };
 
     const handleDiscardFromSwitchDialog = () => {
@@ -630,7 +665,7 @@ export default function TasksPage({
     }, [editorOpen, switchDialogOpen, validationDialogOpen, warningDialogOpen]);
 
     const renderRow = (task) => {
-        const isSelected = task.id === selectedTaskId;
+        const isSelected = sameId(task.id, selectedTaskId);
 
         return (
             <tr
@@ -647,18 +682,29 @@ export default function TasksPage({
                 <td>{resolveClientLabel(clients, task.clientId)}</td>
                 <td>{task.name}</td>
                 <td>{Number(task.estimated_hours).toFixed(2)}</td>
-                <td>{resolveSoftwareProductLabel(softwareProducts, task.softwareProductId)}</td>
+                <td>{resolveSoftwareProductLabel(softwareProducts, task.softwareProductId ?? null) || task.softwareProductName || ""}</td>
             </tr>
         );
     };
 
+    const filterClients = useMemo(
+        () => clients.filter(client => sameId(client.organizationId, selectedOrganizationId)),
+        [clients, selectedOrganizationId]
+    );
+    const filterProjects = useMemo(
+        () => projects.filter(project =>
+            sameId(project.organizationId, selectedOrganizationId)
+            && sameId(project.clientId, selectedClientId)
+        ),
+        [projects, selectedClientId, selectedOrganizationId]
+    );
     const editorClients = draftTask
-        ? clients.filter(client => client.organizationId === draftTask.organizationId)
+        ? clients.filter(client => sameId(client.organizationId, draftTask.organizationId))
         : [];
     const editorProjects = draftTask
         ? projects.filter(project =>
-            project.organizationId === draftTask.organizationId
-            && project.clientId === draftTask.clientId
+            sameId(project.organizationId, draftTask.organizationId)
+            && sameId(project.clientId, draftTask.clientId)
         )
         : [];
 
@@ -686,7 +732,7 @@ export default function TasksPage({
                     >
                         {organizations.map(organization => (
                             <option key={organization.id} value={String(organization.id)}>
-                                {organization.shortName} - {organization.fullName}
+                                {organization.shortName}
                             </option>
                         ))}
                     </select>
@@ -701,14 +747,14 @@ export default function TasksPage({
                         className="clients-filter-select tasks-filter-select"
                         value={String(selectedClientId ?? "")}
                         onChange={event => handleClientChange(event.target.value)}
-                        disabled={editorOpen && isDraftDirty ? false : editorClients.length === 0}
+                        disabled={editorOpen && isDraftDirty ? false : filterClients.length === 0}
                     >
-                        {editorClients.length === 0 ? (
+                        {filterClients.length === 0 ? (
                             <option value="">No clients</option>
                         ) : (
-                            editorClients.map(client => (
+                            filterClients.map(client => (
                                 <option key={client.id} value={String(client.id)}>
-                                    {client.shortName} - {client.fullName}
+                                    {client.shortName}
                                 </option>
                             ))
                         )}
@@ -724,14 +770,14 @@ export default function TasksPage({
                         className="clients-filter-select tasks-filter-select"
                         value={String(selectedProjectId ?? "")}
                         onChange={event => handleProjectChange(event.target.value)}
-                        disabled={editorProjects.length === 0}
+                        disabled={filterProjects.length === 0}
                     >
-                        {editorProjects.length === 0 ? (
+                        {filterProjects.length === 0 ? (
                             <option value="">No projects</option>
                         ) : (
-                            editorProjects.map(project => (
+                            filterProjects.map(project => (
                                 <option key={project.id} value={String(project.id)}>
-                                    {project.shortName} - {project.fullName}
+                                    {project.shortName}
                                 </option>
                             ))
                         )}
@@ -854,7 +900,7 @@ export default function TasksPage({
                                         <option value="">Select organization</option>
                                         {organizations.map(organization => (
                                             <option key={organization.id} value={String(organization.id)}>
-                                                {organization.shortName} - {organization.fullName}
+                                                {organization.shortName}
                                             </option>
                                         ))}
                                     </select>
@@ -870,7 +916,7 @@ export default function TasksPage({
                                         <option value="">Select client</option>
                                         {editorClients.map(client => (
                                             <option key={client.id} value={String(client.id)}>
-                                                {client.shortName} - {client.fullName}
+                                                {client.shortName}
                                             </option>
                                         ))}
                                     </select>
@@ -886,7 +932,7 @@ export default function TasksPage({
                                         <option value="">Select project</option>
                                         {editorProjects.map(project => (
                                             <option key={project.id} value={String(project.id)}>
-                                                {project.shortName} - {project.fullName}
+                                                {project.shortName}
                                             </option>
                                         ))}
                                     </select>

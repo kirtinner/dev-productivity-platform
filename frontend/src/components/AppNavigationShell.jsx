@@ -1,4 +1,4 @@
-export default function AppNavigationShell({ activePage, onNavigate, onOpenSettings, onLogout, children }) {
+export default function AppNavigationShell({ activePage, onNavigate, onLogout, children }) {
     const mainItems = [
         { key: "time-tracking", label: "Time Tracking" },
         { key: "reports", label: "Reports" }
@@ -59,7 +59,15 @@ export default function AppNavigationShell({ activePage, onNavigate, onOpenSetti
 
                 <div className="app-shell-footer">
                     <div className="app-shell-footer-separator" aria-hidden="true" />
-                    <button type="button" className="app-shell-nav-item" onClick={onOpenSettings}>
+                    <button
+                        type="button"
+                        className={[
+                            "app-shell-nav-item",
+                            activePage === "settings" ? "app-shell-nav-item-active" : ""
+                        ].filter(Boolean).join(" ")}
+                        onClick={() => onNavigate("settings")}
+                        aria-current={activePage === "settings" ? "page" : undefined}
+                    >
                         Settings
                     </button>
                     <div className="app-shell-footer-separator app-shell-footer-separator-compact" aria-hidden="true" />

@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { initialOrganizations } from "../mock/organizations";
-
-function cloneOrganizations(items) {
-    return items.map(item => ({ ...item }));
-}
+import {
+    createOrganization as apiCreateOrganization,
+    deleteOrganization as apiDeleteOrganization,
+    getOrganizations as loadOrganizations,
+    updateOrganization as apiUpdateOrganization
+} from "../services/organizationsService";
 
 function createOrganization(nextId) {
     return {
@@ -11,10 +12,6 @@ function createOrganization(nextId) {
         shortName: "",
         fullName: ""
     };
-}
-
-function isOrganizationLinkedInSystem(organization) {
-    return organization.id === 1 || organization.shortName.toUpperCase() === "CONT";
 }
 
 function validateOrganization(organization) {
@@ -32,17 +29,19 @@ function validateOrganization(organization) {
 }
 
 export default function OrganizationsPage() {
-    const [organizations, setOrganizations] = useState(cloneOrganizations(initialOrganizations));
-    const [savedOrganizations, setSavedOrganizations] = useState(cloneOrganizations(initialOrganizations));
-    const [selectedOrganizationId, setSelectedOrganizationId] = useState(initialOrganizations[0]?.id ?? null);
+    const [organizations, setOrganizations] = useState([]);
+    const [savedOrganizations, setSavedOrganizations] = useState([]);
+    const [selectedOrganizationId, setSelectedOrganizationId] = useState(null);
     const [editingOrganizationId, setEditingOrganizationId] = useState(null);
     const [draftOrganization, setDraftOrganization] = useState(null);
     const [editingOriginalOrganization, setEditingOriginalOrganization] = useState(null);
-    const [nextId, setNextId] = useState(initialOrganizations.length + 1);
+    const [nextId, setNextId] = useState(1);
     const [validationDialogOpen, setValidationDialogOpen] = useState(false);
     const [validationIssues, setValidationIssues] = useState([]);
-    const [warningDialogOpen, setWarningDialogOpen] = useState(false);
-    const [warningMessage, setWarningMessage] = useState("");
+    const [saveErrorDialogOpen, setSaveErrorDialogOpen] = useState(false);
+    const [saveErrorMessage, setSaveErrorMessage] = useState("");
+    const [deleteWarningDialogOpen, setDeleteWarningDialogOpen] = useState(false);
+    const [deleteWarningMessage, setDeleteWarningMessage] = useState("");
     const [switchDialogOpen, setSwitchDialogOpen] = useState(false);
     const [pendingSelectionId, setPendingSelectionId] = useState(null);
     const handleCancelRef = useRef(() => {});
@@ -93,8 +92,10 @@ export default function OrganizationsPage() {
     const closeModals = () => {
         setValidationDialogOpen(false);
         setValidationIssues([]);
-        setWarningDialogOpen(false);
-        setWarningMessage("");
+        setSaveErrorDialogOpen(false);
+        setSaveErrorMessage("");
+        setDeleteWarningDialogOpen(false);
+        setDeleteWarningMessage("");
         setSwitchDialogOpen(false);
         setPendingSelectionId(null);
     };
@@ -107,7 +108,7 @@ export default function OrganizationsPage() {
         closeModals();
     };
 
-    const commitDraft = (nextSelectedId = selectedOrganizationId) => {
+    const commitDraft = async (nextSelectedId = selectedOrganizationId) => {
         if (!draftOrganization) {
             return false;
         }
@@ -119,28 +120,47 @@ export default function OrganizationsPage() {
             return false;
         }
 
-        const nextOrganizations = organizations.map(organization =>
-            organization.id === draftOrganization.id
-                ? { ...draftOrganization }
-                : organization
-        );
+        try {
+            const isNewOrganization = editingOriginalOrganization == null;
+            const savedOrganization = isNewOrganization
+                ? await apiCreateOrganization({
+                    shortName: draftOrganization.shortName,
+                    fullName: draftOrganization.fullName
+                })
+                : await apiUpdateOrganization(draftOrganization.id, {
+                    shortName: draftOrganization.shortName,
+                    fullName: draftOrganization.fullName
+                });
 
-        const nextSavedOrganizations = savedOrganizations.some(organization => organization.id === draftOrganization.id)
-            ? savedOrganizations.map(organization =>
-                organization.id === draftOrganization.id
-                    ? { ...draftOrganization }
-                    : organization
-            )
-            : [...savedOrganizations, { ...draftOrganization }];
-
-        setOrganizations(nextOrganizations);
-        setSavedOrganizations(cloneOrganizations(nextSavedOrganizations));
-        setSelectedOrganizationId(nextSelectedId);
-        setEditingOrganizationId(null);
-        setDraftOrganization(null);
-        setEditingOriginalOrganization(null);
-        closeModals();
-        return true;
+            setOrganizations(currentOrganizations =>
+                currentOrganizations.map(organization =>
+                    organization.id === draftOrganization.id
+                        ? { ...savedOrganization }
+                        : organization
+                )
+            );
+            setSavedOrganizations(currentOrganizations =>
+                currentOrganizations.some(organization => organization.id === draftOrganization.id)
+                    ? currentOrganizations.map(organization =>
+                        organization.id === draftOrganization.id
+                            ? { ...savedOrganization }
+                            : organization
+                    )
+                    : [...currentOrganizations, { ...savedOrganization }]
+            );
+            setSelectedOrganizationId(nextSelectedId ?? savedOrganization.id);
+            setEditingOrganizationId(null);
+            setDraftOrganization(null);
+            setEditingOriginalOrganization(null);
+            setNextId(currentId => Math.max(currentId, savedOrganization.id + 1));
+            closeModals();
+            return true;
+        } catch (error) {
+            const message = error?.response?.data?.message ?? error?.message ?? "Unable to save organization.";
+            setSaveErrorMessage(message);
+            setSaveErrorDialogOpen(true);
+            return false;
+        }
     };
 
     const handleAddOrganization = () => {
@@ -157,7 +177,7 @@ export default function OrganizationsPage() {
 
     const handleEditOrSave = () => {
         if (editingOrganizationId != null) {
-            commitDraft();
+            void commitDraft();
             return;
         }
 
@@ -225,31 +245,35 @@ export default function OrganizationsPage() {
             return;
         }
 
-        if (isOrganizationLinkedInSystem(selectedOrganization)) {
-            setWarningMessage("Организация используется в системе и не может быть удалена.");
-            setWarningDialogOpen(true);
-            return;
-        }
+        void (async () => {
+            try {
+                await apiDeleteOrganization(selectedOrganization.id);
 
-        setOrganizations(currentOrganizations =>
-            currentOrganizations.filter(organization => organization.id !== selectedOrganization.id)
-        );
-        setSavedOrganizations(currentOrganizations =>
-            currentOrganizations.filter(organization => organization.id !== selectedOrganization.id)
-        );
+                setOrganizations(currentOrganizations =>
+                    currentOrganizations.filter(organization => organization.id !== selectedOrganization.id)
+                );
+                setSavedOrganizations(currentOrganizations =>
+                    currentOrganizations.filter(organization => organization.id !== selectedOrganization.id)
+                );
 
-        if (editingOrganizationId === selectedOrganization.id) {
-            setEditingOrganizationId(null);
-            setDraftOrganization(null);
-        }
+                if (editingOrganizationId === selectedOrganization.id) {
+                    setEditingOrganizationId(null);
+                    setDraftOrganization(null);
+                }
 
-        const remaining = organizations.filter(organization => organization.id !== selectedOrganization.id);
-        setSelectedOrganizationId(remaining[0]?.id ?? null);
-        closeModals();
+                const remaining = organizations.filter(organization => organization.id !== selectedOrganization.id);
+                setSelectedOrganizationId(remaining[0]?.id ?? null);
+                closeModals();
+            } catch (error) {
+                const message = error?.response?.data?.message ?? error?.message ?? "Unable to delete organization.";
+                setDeleteWarningMessage(message);
+                setDeleteWarningDialogOpen(true);
+            }
+        })();
     };
 
-    const handleSaveFromSwitchDialog = () => {
-        if (commitDraft(pendingSelectionId)) {
+    const handleSaveFromSwitchDialog = async () => {
+        if (await commitDraft(pendingSelectionId)) {
             setSwitchDialogOpen(false);
             setPendingSelectionId(null);
         }
@@ -277,7 +301,42 @@ export default function OrganizationsPage() {
     });
 
     useEffect(() => {
-        if (editingOrganizationId == null || validationDialogOpen || warningDialogOpen || switchDialogOpen) {
+        let active = true;
+
+        async function loadData() {
+            try {
+                const nextOrganizations = await loadOrganizations();
+
+                if (!active) {
+                    return;
+                }
+
+                setOrganizations(nextOrganizations);
+                setSavedOrganizations(nextOrganizations.map(item => ({ ...item })));
+                setSelectedOrganizationId(nextOrganizations[0]?.id ?? null);
+                setNextId(Math.max(...nextOrganizations.map(item => item.id), 0) + 1);
+            } catch {
+                if (!active) {
+                    return;
+                }
+            }
+        }
+
+        loadData();
+
+        return () => {
+            active = false;
+        };
+    }, []);
+
+    useEffect(() => {
+        if (
+            editingOrganizationId == null ||
+            validationDialogOpen ||
+            saveErrorDialogOpen ||
+            deleteWarningDialogOpen ||
+            switchDialogOpen
+        ) {
             return undefined;
         }
 
@@ -296,7 +355,8 @@ export default function OrganizationsPage() {
         editingOrganizationId,
         switchDialogOpen,
         validationDialogOpen,
-        warningDialogOpen
+        saveErrorDialogOpen,
+        deleteWarningDialogOpen
     ]);
 
     const renderRow = (organization) => {
@@ -437,7 +497,30 @@ export default function OrganizationsPage() {
                 </div>
             )}
 
-            {warningDialogOpen && (
+            {saveErrorDialogOpen && (
+                <div className="tracking-modal-overlay" role="presentation">
+                    <div
+                        className="tracking-modal tracking-modal-confirm"
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="organizations-save-error-title"
+                    >
+                        <div className="tracking-modal-header">
+                            <h3 id="organizations-save-error-title">Unable to save organization</h3>
+                        </div>
+                        <div className="tracking-modal-body">
+                            <p className="tracking-modal-text">{saveErrorMessage}</p>
+                        </div>
+                        <div className="tracking-modal-actions">
+                            <button type="button" className="tracking-modal-button" onClick={() => setSaveErrorDialogOpen(false)}>
+                                OK
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {deleteWarningDialogOpen && (
                 <div className="tracking-modal-overlay" role="presentation">
                     <div
                         className="tracking-modal tracking-modal-confirm"
@@ -449,10 +532,10 @@ export default function OrganizationsPage() {
                             <h3 id="organizations-warning-title">Delete not available</h3>
                         </div>
                         <div className="tracking-modal-body">
-                            <p className="tracking-modal-text">{warningMessage}</p>
+                            <p className="tracking-modal-text">{deleteWarningMessage}</p>
                         </div>
                         <div className="tracking-modal-actions">
-                            <button type="button" className="tracking-modal-button" onClick={() => setWarningDialogOpen(false)}>
+                            <button type="button" className="tracking-modal-button" onClick={() => setDeleteWarningDialogOpen(false)}>
                                 OK
                             </button>
                         </div>

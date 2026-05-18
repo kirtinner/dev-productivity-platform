@@ -25,7 +25,8 @@ public class Task {
 
     private String taskNumber;
 
-    private Integer estimatedHours;
+    @Column(nullable = false)
+    private Double estimatedHours;
 
     @Column(length = 2000)
     private String description;
@@ -46,6 +47,10 @@ public class Task {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "project_id", nullable = false)
     private Project project;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "software_product_id")
+    private SoftwareProduct softwareProduct;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "developer_id", nullable = false)

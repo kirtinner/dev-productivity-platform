@@ -5,6 +5,8 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -17,9 +19,23 @@ import java.util.List;
 
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class JwtFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
+
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        String path = request.getRequestURI();
+        boolean shouldSkip = HttpMethod.OPTIONS.matches(request.getMethod())
+                || path.equals("/api/user-settings")
+                || path.equals("/api/user-settings/")
+                || path.startsWith("/api/user-settings/");
+        if (shouldSkip && path.startsWith("/api/user-settings")) {
+            log.info("JwtFilter bypass for {} {}", request.getMethod(), path);
+        }
+        return shouldSkip;
+    }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,

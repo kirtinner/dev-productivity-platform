@@ -1,25 +1,26 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { getClients as loadClients } from "../services/clientsService";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+    createClient as apiCreateClient,
+    deleteClient as apiDeleteClient,
+    getClients as loadClients,
+    updateClient as apiUpdateClient
+} from "../services/clientsService";
 
-function cloneClients(items) {
-    return items.map(item => ({ ...item }));
-}
-
-function createClient(nextId, organizationId) {
+function createClientDraft(organizationId) {
     return {
-        id: nextId,
+        id: null,
         organizationId,
         shortName: "",
         fullName: ""
     };
 }
 
-function isClientLinkedInSystem(client) {
-    return client.id === 101 || client.shortName.toUpperCase() === "ACME";
-}
-
 function validateClient(client) {
     const issues = [];
+
+    if (client.organizationId == null) {
+        issues.push("organization is required.");
+    }
 
     if (!client.shortName.trim()) {
         issues.push("shortName is required.");
@@ -37,20 +38,16 @@ export default function ClientsPage({
     currentOrganizationId = null
 }) {
     const [clients, setClients] = useState([]);
-    const [savedClients, setSavedClients] = useState([]);
     const [selectedOrganizationId, setSelectedOrganizationId] = useState(currentOrganizationId ?? organizations[0]?.id ?? null);
     const [selectedClientId, setSelectedClientId] = useState(null);
-    const [editingClientId, setEditingClientId] = useState(null);
+    const [editorOpen, setEditorOpen] = useState(false);
+    const [editorMode, setEditorMode] = useState(null);
     const [draftClient, setDraftClient] = useState(null);
-    const [editingOriginalClient, setEditingOriginalClient] = useState(null);
-    const [nextId, setNextId] = useState(106);
     const [validationDialogOpen, setValidationDialogOpen] = useState(false);
     const [validationIssues, setValidationIssues] = useState([]);
     const [warningDialogOpen, setWarningDialogOpen] = useState(false);
+    const [warningTitle, setWarningTitle] = useState("Delete not available");
     const [warningMessage, setWarningMessage] = useState("");
-    const [switchDialogOpen, setSwitchDialogOpen] = useState(false);
-    const [pendingSelectionId, setPendingSelectionId] = useState(null);
-    const [pendingOrganizationId, setPendingOrganizationId] = useState(null);
     const handleCancelRef = useRef(() => {});
 
     const filteredClients = useMemo(
@@ -58,15 +55,7 @@ export default function ClientsPage({
         [clients, selectedOrganizationId]
     );
 
-    const selectedClient = clients.find(client => client.id === selectedClientId) ?? null;
-    const isDirty = editingClientId != null || JSON.stringify(clients) !== JSON.stringify(savedClients);
-    const isDraftDirty = editingClientId != null && (
-        editingOriginalClient == null ||
-        draftClient == null ||
-        draftClient.shortName !== editingOriginalClient.shortName ||
-        draftClient.fullName !== editingOriginalClient.fullName ||
-        draftClient.organizationId !== editingOriginalClient.organizationId
-    );
+    const selectedClient = filteredClients.find(client => client.id === selectedClientId) ?? null;
     const clientCountLabel = `${filteredClients.length} client${filteredClients.length === 1 ? "" : "s"}`;
 
     useEffect(() => {
@@ -80,8 +69,16 @@ export default function ClientsPage({
                     return;
                 }
 
+                const initialOrganizationId =
+                    currentOrganizationId
+                    ?? organizations[0]?.id
+                    ?? nextClients[0]?.organizationId
+                    ?? null;
+                const initialClientId = nextClients.find(client => client.organizationId === initialOrganizationId)?.id ?? null;
+
                 setClients(nextClients);
-                setSavedClients(cloneClients(nextClients));
+                setSelectedOrganizationId(initialOrganizationId);
+                setSelectedClientId(initialClientId);
             } catch {
                 if (!active) {
                     return;
@@ -94,258 +91,182 @@ export default function ClientsPage({
         return () => {
             active = false;
         };
-    }, [organizations]);
+    }, [currentOrganizationId, organizations]);
 
-    const closeModals = () => {
+    const closeTransientDialogs = useCallback(() => {
         setValidationDialogOpen(false);
         setValidationIssues([]);
         setWarningDialogOpen(false);
+        setWarningTitle("Delete not available");
         setWarningMessage("");
-        setSwitchDialogOpen(false);
-        setPendingSelectionId(null);
-        setPendingOrganizationId(null);
-    };
+    }, []);
 
-    const beginEdit = (client) => {
-        setSelectedClientId(client.id);
-        setEditingClientId(client.id);
-        setDraftClient({ ...client });
-        setEditingOriginalClient({ ...client });
-        closeModals();
-    };
-
-    const discardCurrentEdit = (nextSelectedId = null) => {
-        const currentEditingId = editingClientId;
-        const savedClient = savedClients.find(client => client.id === currentEditingId);
-
-        if (savedClient) {
-            setClients(currentClients =>
-                currentClients.map(client =>
-                    client.id === savedClient.id
-                        ? { ...savedClient }
-                        : client
-                )
-            );
-            setSelectedClientId(nextSelectedId ?? savedClient.id);
-        } else {
-            setClients(currentClients => currentClients.filter(client => client.id !== currentEditingId));
-        }
-
-        setEditingClientId(null);
+    const closeEditor = useCallback(() => {
+        setEditorOpen(false);
+        setEditorMode(null);
         setDraftClient(null);
-        setEditingOriginalClient(null);
-        const nextVisibleClient = savedClient
-            ? null
-            : clients.find(client => client.organizationId === selectedOrganizationId && client.id !== currentEditingId) ?? null;
-        if (!savedClient) {
-            setSelectedClientId(nextVisibleClient?.id ?? nextSelectedId ?? null);
-        }
-        return Boolean(savedClient);
+        closeTransientDialogs();
+    }, [closeTransientDialogs]);
+
+    const openEditorForExisting = (client) => {
+        setSelectedClientId(client.id);
+        setEditorOpen(true);
+        setEditorMode("edit");
+        setDraftClient({ ...client });
+        closeTransientDialogs();
     };
 
-    const commitDraft = (nextSelectedId = selectedClientId) => {
+    const openEditorForNew = () => {
+        const nextDraft = createClientDraft(selectedOrganizationId);
+
+        setEditorOpen(true);
+        setEditorMode("add");
+        setDraftClient(nextDraft);
+        closeTransientDialogs();
+    };
+
+    const selectFirstVisibleClient = (nextClients, organizationId) => {
+        setSelectedClientId(nextClients.find(client => client.organizationId === organizationId)?.id ?? null);
+    };
+
+    const handleAddClient = () => {
+        if (editorOpen) {
+            return;
+        }
+
+        openEditorForNew();
+    };
+
+    const handleEditClient = () => {
+        if (selectedClient && !editorOpen) {
+            openEditorForExisting(selectedClient);
+        }
+    };
+
+    const handleRowSelect = (client) => {
+        setSelectedClientId(client.id);
+    };
+
+    const handleRowEditRequest = (client) => {
+        if (!editorOpen) {
+            openEditorForExisting(client);
+        }
+    };
+
+    const handleDraftChange = (field, nextValue) => {
+        setDraftClient(current => (current ? {
+            ...current,
+            [field]: nextValue
+        } : current));
+    };
+
+    const handleDraftOrganizationChange = (nextOrganizationId) => {
+        const parsedOrganizationId = nextOrganizationId === "" ? null : Number(nextOrganizationId);
+        handleDraftChange("organizationId", parsedOrganizationId);
+    };
+
+    const handleOrganizationChange = (nextOrganizationId) => {
+        const parsedOrganizationId = Number(nextOrganizationId);
+
+        setSelectedOrganizationId(parsedOrganizationId);
+        setSelectedClientId(clients.find(client => client.organizationId === parsedOrganizationId)?.id ?? null);
+        closeTransientDialogs();
+    };
+
+    const handleDeleteClient = async () => {
+        if (!selectedClient || editorOpen) {
+            return;
+        }
+
+        const clientId = selectedClient.id;
+        try {
+            await apiDeleteClient(clientId);
+            const nextClients = clients.filter(client => client.id !== clientId);
+
+            setClients(nextClients);
+            selectFirstVisibleClient(nextClients, selectedOrganizationId);
+            closeTransientDialogs();
+        } catch (error) {
+            const message =
+                error?.response?.data?.message ??
+                error?.response?.data?.error ??
+                error?.message ??
+                "Client is used in the system and cannot be deleted.";
+            setWarningTitle("Delete not available");
+            setWarningMessage(message);
+            setWarningDialogOpen(true);
+        }
+    };
+
+    const handleSaveClient = async () => {
         if (!draftClient) {
-            return false;
+            return;
         }
 
         const issues = validateClient(draftClient);
         if (issues.length > 0) {
             setValidationIssues(issues);
             setValidationDialogOpen(true);
-            return false;
-        }
-
-        const nextClients = clients.map(client =>
-            client.id === draftClient.id
-                ? { ...draftClient }
-                : client
-        );
-
-        const nextSavedClients = savedClients.some(client => client.id === draftClient.id)
-            ? savedClients.map(client =>
-                client.id === draftClient.id
-                    ? { ...draftClient }
-                    : client
-            )
-            : [...savedClients, { ...draftClient }];
-
-        setClients(nextClients);
-        setSavedClients(cloneClients(nextSavedClients));
-        setSelectedClientId(nextSelectedId);
-        setEditingClientId(null);
-        setDraftClient(null);
-        setEditingOriginalClient(null);
-        closeModals();
-        return true;
-    };
-
-    const handleAddClient = () => {
-        const nextClient = createClient(nextId, selectedOrganizationId);
-
-        setClients(currentClients => [...currentClients, nextClient]);
-        setSelectedClientId(nextClient.id);
-        setEditingClientId(nextClient.id);
-        setDraftClient({ ...nextClient });
-        setEditingOriginalClient(null);
-        setNextId(currentId => currentId + 1);
-        closeModals();
-    };
-
-    const handleEditOrSave = () => {
-        if (editingClientId != null) {
-            commitDraft();
             return;
         }
 
-        if (selectedClient) {
-            beginEdit(selectedClient);
-        }
-    };
+        try {
+            const isNewClient = editorMode === "add";
+            const payload = {
+                organizationId: draftClient.organizationId,
+                shortName: draftClient.shortName.trim(),
+                fullName: draftClient.fullName.trim()
+            };
+            const savedClient = isNewClient
+                ? await apiCreateClient(payload)
+                : await apiUpdateClient(draftClient.id, payload);
+            const normalizedClient = {
+                ...draftClient,
+                ...savedClient,
+                ...payload
+            };
 
-    const handleRowEditRequest = (client) => {
-        if (editingClientId != null && client.id !== editingClientId) {
-            if (isDraftDirty) {
-                setPendingSelectionId(client.id);
-                setSwitchDialogOpen(true);
-                return;
+            const nextClients = isNewClient
+                ? [...clients, normalizedClient]
+                : clients.map(client =>
+                    client.id === draftClient.id
+                        ? normalizedClient
+                        : client
+                );
+
+            setClients(nextClients);
+            if (normalizedClient.organizationId === selectedOrganizationId) {
+                setSelectedClientId(normalizedClient.id);
+            } else {
+                selectFirstVisibleClient(nextClients, selectedOrganizationId);
             }
-
-            discardCurrentEdit(client.id);
-            beginEdit(client);
-            return;
-        }
-
-        beginEdit(client);
-    };
-
-    const handleCancel = () => {
-        if (editingClientId == null) {
-            return;
-        }
-
-        discardCurrentEdit();
-        closeModals();
-    };
-
-    const handleRowSelect = (client) => {
-        if (editingClientId != null && client.id !== editingClientId) {
-            if (!isDraftDirty) {
-                discardCurrentEdit(client.id);
-                closeModals();
-                return;
-            }
-
-            setPendingSelectionId(client.id);
-            setSwitchDialogOpen(true);
-            return;
-        }
-
-        setSelectedClientId(client.id);
-    };
-
-    const handleDraftChange = (field, nextValue) => {
-        if (!draftClient) {
-            return;
-        }
-
-        setDraftClient({
-            ...draftClient,
-            [field]: nextValue
-        });
-        closeModals();
-    };
-
-    const handleOrganizationChange = (nextOrganizationId) => {
-        const parsedOrganizationId = Number(nextOrganizationId);
-
-        if (editingClientId != null && isDraftDirty) {
-            setPendingOrganizationId(parsedOrganizationId);
-            setSwitchDialogOpen(true);
-            return;
-        }
-
-        if (editingClientId != null) {
-            discardCurrentEdit();
-        }
-
-        setSelectedOrganizationId(parsedOrganizationId);
-        const nextVisibleClient = clients.find(client => client.organizationId === parsedOrganizationId) ?? null;
-        setSelectedClientId(nextVisibleClient?.id ?? null);
-        closeModals();
-    };
-
-    const handleDeleteClient = () => {
-        if (!selectedClient) {
-            return;
-        }
-
-        if (isClientLinkedInSystem(selectedClient)) {
-            setWarningMessage("Client is used in the system and cannot be deleted.");
+            closeEditor();
+        } catch (error) {
+            const message =
+                error?.response?.data?.message ??
+                error?.response?.data?.error ??
+                error?.message ??
+                "Unable to save client.";
+            setWarningTitle("Save not available");
+            setWarningMessage(message);
             setWarningDialogOpen(true);
+        }
+    };
+
+    const handleCancelClient = () => {
+        if (!editorOpen) {
             return;
         }
 
-        setClients(currentClients =>
-            currentClients.filter(client => client.id !== selectedClient.id)
-        );
-        setSavedClients(currentSavedClients =>
-            currentSavedClients.filter(client => client.id !== selectedClient.id)
-        );
-
-        if (editingClientId === selectedClient.id) {
-            setEditingClientId(null);
-            setDraftClient(null);
-        }
-
-        const remaining = filteredClients.filter(client => client.id !== selectedClient.id);
-        setSelectedClientId(remaining[0]?.id ?? null);
-        closeModals();
-    };
-
-    const handleSaveFromSwitchDialog = () => {
-        if (commitDraft(pendingSelectionId)) {
-            if (pendingOrganizationId != null) {
-                setSelectedOrganizationId(pendingOrganizationId);
-                const nextVisibleClient = clients.find(client => client.organizationId === pendingOrganizationId) ?? null;
-                setSelectedClientId(nextVisibleClient?.id ?? null);
-            }
-            setSwitchDialogOpen(false);
-            setPendingSelectionId(null);
-            setPendingOrganizationId(null);
-        }
-    };
-
-    const handleDiscardFromSwitchDialog = () => {
-        if (editingClientId == null) {
-            setSwitchDialogOpen(false);
-            setPendingSelectionId(null);
-            setPendingOrganizationId(null);
-            return;
-        }
-
-        discardCurrentEdit(pendingSelectionId);
-        if (pendingOrganizationId != null) {
-            setSelectedOrganizationId(pendingOrganizationId);
-            const nextVisibleClient = clients.find(client => client.organizationId === pendingOrganizationId) ?? null;
-            setSelectedClientId(nextVisibleClient?.id ?? null);
-        }
-        setSwitchDialogOpen(false);
-        setPendingSelectionId(null);
-        setPendingOrganizationId(null);
-    };
-
-    const handleStayEditing = () => {
-        setSwitchDialogOpen(false);
-        setPendingSelectionId(null);
-        setPendingOrganizationId(null);
+        closeEditor();
     };
 
     useEffect(() => {
-        handleCancelRef.current = handleCancel;
+        handleCancelRef.current = handleCancelClient;
     });
 
     useEffect(() => {
-        if (editingClientId == null || validationDialogOpen || warningDialogOpen || switchDialogOpen) {
+        if (!editorOpen || validationDialogOpen || warningDialogOpen) {
             return undefined;
         }
 
@@ -360,11 +281,10 @@ export default function ClientsPage({
 
         window.addEventListener("keydown", handleKeyDown);
         return () => window.removeEventListener("keydown", handleKeyDown);
-    }, [editingClientId, switchDialogOpen, validationDialogOpen, warningDialogOpen]);
+    }, [editorOpen, validationDialogOpen, warningDialogOpen]);
 
     const renderRow = (client) => {
         const isSelected = client.id === selectedClientId;
-        const isEditingRow = client.id === editingClientId;
 
         return (
             <tr
@@ -374,37 +294,17 @@ export default function ClientsPage({
                 onDoubleClick={() => handleRowEditRequest(client)}
             >
                 <td>
-                    {isEditingRow ? (
-                        <input
-                            className="app-master-data-input organizations-input"
-                            type="text"
-                            value={draftClient?.shortName ?? ""}
-                            onChange={event => handleDraftChange("shortName", event.target.value)}
-                            onClick={event => event.stopPropagation()}
-                        />
-                    ) : (
-                        <span className="organizations-readonly-cell">{client.shortName}</span>
-                    )}
+                    <span className="organizations-readonly-cell">{client.shortName}</span>
                 </td>
                 <td>
-                    {isEditingRow ? (
-                        <input
-                            className="app-master-data-input organizations-input"
-                            type="text"
-                            value={draftClient?.fullName ?? ""}
-                            onChange={event => handleDraftChange("fullName", event.target.value)}
-                            onClick={event => event.stopPropagation()}
-                        />
-                    ) : (
-                        <span className="organizations-readonly-cell">{client.fullName}</span>
-                    )}
+                    <span className="organizations-readonly-cell">{client.fullName}</span>
                 </td>
             </tr>
         );
     };
 
     return (
-        <div className="tracking-main organizations-main" data-dirty={isDirty ? "true" : "false"}>
+        <div className="tracking-main organizations-main">
             <header className="tracking-topbar">
                 <div className="tracking-topbar-main">
                     <div>
@@ -426,7 +326,7 @@ export default function ClientsPage({
                 >
                     {organizations.map(organization => (
                         <option key={organization.id} value={String(organization.id)}>
-                            {organization.shortName} - {organization.fullName}
+                            {organization.shortName}
                         </option>
                     ))}
                 </select>
@@ -441,40 +341,32 @@ export default function ClientsPage({
                         </div>
 
                         <div className="clients-toolbar">
-                            {editingClientId != null ? (
-                                <>
-                                    <button type="button" className="tracking-save-button" onClick={handleEditOrSave}>
-                                        Save
-                                    </button>
-                                    <button type="button" className="tracking-save-button" onClick={handleCancel}>
-                                        Cancel
-                                    </button>
-                                </>
-                            ) : (
-                                <>
-                                    <div className="organizations-toolbar-actions">
-                                        <button type="button" className="tracking-save-button" onClick={handleAddClient}>
-                                            Add
-                                        </button>
-                                        <button
-                                            type="button"
-                                            className="tracking-save-button"
-                                            onClick={handleEditOrSave}
-                                            disabled={!selectedClient}
-                                        >
-                                            Edit
-                                        </button>
-                                    </div>
-                                    <button
-                                        type="button"
-                                        className="organizations-delete-button organizations-delete-button-separated"
-                                        onClick={handleDeleteClient}
-                                        disabled={!selectedClient}
-                                    >
-                                        Delete
-                                    </button>
-                                </>
-                            )}
+                            <div className="organizations-toolbar-actions">
+                                <button
+                                    type="button"
+                                    className="tracking-save-button"
+                                    onClick={handleAddClient}
+                                    disabled={editorOpen}
+                                >
+                                    Add
+                                </button>
+                                <button
+                                    type="button"
+                                    className="tracking-save-button"
+                                    onClick={handleEditClient}
+                                    disabled={editorOpen || !selectedClient}
+                                >
+                                    Edit
+                                </button>
+                            </div>
+                            <button
+                                type="button"
+                                className="organizations-delete-button organizations-delete-button-separated"
+                                onClick={handleDeleteClient}
+                                disabled={editorOpen || !selectedClient}
+                            >
+                                Delete
+                            </button>
                         </div>
                     </div>
 
@@ -495,6 +387,69 @@ export default function ClientsPage({
                     </div>
                 </section>
             </div>
+
+            {editorOpen && draftClient && (
+                <div className="tracking-modal-overlay" role="presentation">
+                    <div
+                        className="tracking-modal tracking-modal-confirm tracking-modal-client-editor"
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="clients-editor-title"
+                    >
+                        <div className="tracking-modal-header">
+                            <h3 id="clients-editor-title">{editorMode === "add" ? "Add Client" : "Edit Client"}</h3>
+                        </div>
+                        <div className="tracking-modal-body">
+                            <div className="tracking-modal-fields">
+                                <label className="tracking-modal-field">
+                                    <span>Organization</span>
+                                    <select
+                                        value={String(draftClient.organizationId ?? "")}
+                                        onChange={event => handleDraftOrganizationChange(event.target.value)}
+                                    >
+                                        <option value="">Select organization</option>
+                                        {organizations.map(organization => (
+                                            <option key={organization.id} value={String(organization.id)}>
+                                                {organization.shortName}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </label>
+
+                                <label className="tracking-modal-field">
+                                    <span>Short Name</span>
+                                    <input
+                                        type="text"
+                                        value={draftClient.shortName ?? ""}
+                                        onChange={event => handleDraftChange("shortName", event.target.value)}
+                                    />
+                                </label>
+
+                                <label className="tracking-modal-field">
+                                    <span>Full Name</span>
+                                    <input
+                                        type="text"
+                                        value={draftClient.fullName ?? ""}
+                                        onChange={event => handleDraftChange("fullName", event.target.value)}
+                                    />
+                                </label>
+                            </div>
+                        </div>
+                        <div className="tracking-modal-actions">
+                            <button type="button" className="tracking-modal-button" onClick={handleSaveClient}>
+                                Save
+                            </button>
+                            <button
+                                type="button"
+                                className="tracking-modal-button tracking-modal-button-secondary"
+                                onClick={handleCancelClient}
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {validationDialogOpen && (
                 <div className="tracking-modal-overlay" role="presentation">
@@ -522,7 +477,7 @@ export default function ClientsPage({
                 <div className="tracking-modal-overlay" role="presentation">
                     <div className="tracking-modal tracking-modal-confirm" role="dialog" aria-modal="true" aria-labelledby="clients-warning-title">
                         <div className="tracking-modal-header">
-                            <h3 id="clients-warning-title">Delete not available</h3>
+                            <h3 id="clients-warning-title">{warningTitle}</h3>
                         </div>
                         <div className="tracking-modal-body">
                             <p className="tracking-modal-text">{warningMessage}</p>
@@ -530,32 +485,6 @@ export default function ClientsPage({
                         <div className="tracking-modal-actions">
                             <button type="button" className="tracking-modal-button" onClick={() => setWarningDialogOpen(false)}>
                                 OK
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {switchDialogOpen && (
-                <div className="tracking-modal-overlay" role="presentation">
-                    <div className="tracking-modal tracking-modal-confirm" role="dialog" aria-modal="true" aria-labelledby="clients-switch-title">
-                        <div className="tracking-modal-header">
-                            <h3 id="clients-switch-title">Unsaved changes</h3>
-                        </div>
-                        <div className="tracking-modal-body">
-                            <p className="tracking-modal-text">
-                                There are unsaved changes for the current client. What do you want to do?
-                            </p>
-                        </div>
-                        <div className="tracking-modal-actions">
-                            <button type="button" className="tracking-modal-button" onClick={handleSaveFromSwitchDialog}>
-                                Save changes
-                            </button>
-                            <button type="button" className="tracking-modal-button" onClick={handleDiscardFromSwitchDialog}>
-                                Discard changes
-                            </button>
-                            <button type="button" className="tracking-modal-button tracking-modal-button-secondary" onClick={handleStayEditing}>
-                                Stay
                             </button>
                         </div>
                     </div>

@@ -8,10 +8,6 @@ function createProduct(nextId) {
     };
 }
 
-function isProductLinkedInSystem(product) {
-    return product.id === 301 || product.shortName.toUpperCase() === "ERP";
-}
-
 function validateProduct(product) {
     const issues = [];
 
@@ -213,12 +209,6 @@ export default function SoftwareProductsSettingsTable({
 
     const handleDeleteProduct = () => {
         if (!selectedSoftwareProduct) {
-            return;
-        }
-
-        if (isProductLinkedInSystem(selectedSoftwareProduct)) {
-            setWarningMessage("Software Product is used in the system and cannot be deleted.");
-            setWarningDialogOpen(true);
             return;
         }
 

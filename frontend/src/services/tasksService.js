@@ -1,9 +1,54 @@
-import { initialTasks } from "../mock/taskRecords";
+import api from "../api/api";
 
-function cloneTasks(items) {
-    return items.map(item => ({ ...item }));
+function normalizeTask(task) {
+    return {
+        id: task.id,
+        completed: Boolean(task.completed),
+        created_at: task.createdAt ?? task.created_at ?? "",
+        task_number: task.taskNumber ?? task.task_number ?? "",
+        name: task.name ?? "",
+        description: task.description ?? "",
+        implementation_details: task.implementationDetails ?? task.implementation_details ?? "",
+        estimated_hours: Number(task.estimatedHours ?? task.estimated_hours ?? 0),
+        organizationId: task.organizationId ?? null,
+        clientId: task.clientId ?? null,
+        projectId: task.projectId ?? null,
+        softwareProductId: task.softwareProductId ?? task.software_product_id ?? null,
+        softwareProductName: task.softwareProductName ?? task.software_product_name ?? ""
+    };
+}
+
+function toTaskRequest(task) {
+    return {
+        completed: Boolean(task.completed),
+        createdAt: task.created_at || null,
+        taskNumber: task.task_number ?? "",
+        name: task.name ?? "",
+        description: task.description ?? "",
+        implementationDetails: task.implementation_details ?? "",
+        estimatedHours: Number(task.estimated_hours ?? 0),
+        organizationId: task.organizationId ?? null,
+        clientId: task.clientId ?? null,
+        projectId: task.projectId ?? null,
+        softwareProductId: task.softwareProductId ?? null
+    };
 }
 
 export async function getTasks() {
-    return cloneTasks(initialTasks);
+    const response = await api.get("/tasks");
+    return response.data.map(normalizeTask);
+}
+
+export async function createTask(payload) {
+    const response = await api.post("/tasks", toTaskRequest(payload));
+    return normalizeTask(response.data);
+}
+
+export async function updateTask(id, payload) {
+    const response = await api.put(`/tasks/${id}`, toTaskRequest(payload));
+    return normalizeTask(response.data);
+}
+
+export async function deleteTask(id) {
+    await api.delete(`/tasks/${id}`);
 }

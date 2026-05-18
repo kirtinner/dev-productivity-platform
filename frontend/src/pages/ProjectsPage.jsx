@@ -1,14 +1,15 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getClients as loadClients } from "../services/clientsService";
-import { getProjects as loadProjects } from "../services/projectsService";
+import {
+    createProject as apiCreateProject,
+    deleteProject as apiDeleteProject,
+    getProjects as loadProjects,
+    updateProject as apiUpdateProject
+} from "../services/projectsService";
 
-function cloneProjects(items) {
-    return items.map(item => ({ ...item }));
-}
-
-function createProject(nextId, organizationId, clientId) {
+function createProjectDraft(organizationId, clientId) {
     return {
-        id: nextId,
+        id: null,
         organizationId,
         clientId,
         shortName: "",
@@ -16,12 +17,16 @@ function createProject(nextId, organizationId, clientId) {
     };
 }
 
-function isProjectLinkedInSystem(project) {
-    return project.id === 201 || project.shortName.toUpperCase() === "ACME-OPS";
-}
-
 function validateProject(project) {
     const issues = [];
+
+    if (project.organizationId == null) {
+        issues.push("organization is required.");
+    }
+
+    if (project.clientId == null) {
+        issues.push("client is required.");
+    }
 
     if (!project.shortName.trim()) {
         issues.push("shortName is required.");
@@ -34,11 +39,10 @@ function validateProject(project) {
     return issues;
 }
 
-function getNextVisibleProjectId(sourceProjects, organizationId, clientId, excludedProjectId = null) {
+function getFirstVisibleProjectId(sourceProjects, organizationId, clientId) {
     return sourceProjects.find(project =>
         project.organizationId === organizationId
         && project.clientId === clientId
-        && project.id !== excludedProjectId
     )?.id ?? null;
 }
 
@@ -48,22 +52,17 @@ export default function ProjectsPage({
 }) {
     const [clients, setClients] = useState([]);
     const [projects, setProjects] = useState([]);
-    const [savedProjects, setSavedProjects] = useState([]);
     const [selectedOrganizationId, setSelectedOrganizationId] = useState(currentOrganizationId ?? organizations[0]?.id ?? null);
     const [selectedClientId, setSelectedClientId] = useState(null);
     const [selectedProjectId, setSelectedProjectId] = useState(null);
-    const [editingProjectId, setEditingProjectId] = useState(null);
+    const [editorOpen, setEditorOpen] = useState(false);
+    const [editorMode, setEditorMode] = useState(null);
     const [draftProject, setDraftProject] = useState(null);
-    const [editingOriginalProject, setEditingOriginalProject] = useState(null);
-    const [nextId, setNextId] = useState(206);
     const [validationDialogOpen, setValidationDialogOpen] = useState(false);
     const [validationIssues, setValidationIssues] = useState([]);
     const [warningDialogOpen, setWarningDialogOpen] = useState(false);
+    const [warningTitle, setWarningTitle] = useState("Delete not available");
     const [warningMessage, setWarningMessage] = useState("");
-    const [switchDialogOpen, setSwitchDialogOpen] = useState(false);
-    const [pendingSelectionId, setPendingSelectionId] = useState(null);
-    const [pendingOrganizationId, setPendingOrganizationId] = useState(null);
-    const [pendingClientId, setPendingClientId] = useState(null);
     const handleCancelRef = useRef(() => {});
 
     const filteredClients = useMemo(
@@ -79,15 +78,12 @@ export default function ProjectsPage({
         [projects, selectedClientId, selectedOrganizationId]
     );
 
-    const selectedProject = projects.find(project => project.id === selectedProjectId) ?? null;
-    const selectedClient = clients.find(client => client.id === selectedClientId) ?? null;
-    const isDirty = editingProjectId != null || JSON.stringify(projects) !== JSON.stringify(savedProjects);
-    const isDraftDirty = editingProjectId != null && (
-        editingOriginalProject == null ||
-        draftProject == null ||
-        draftProject.shortName !== editingOriginalProject.shortName ||
-        draftProject.fullName !== editingOriginalProject.fullName
+    const draftClients = useMemo(
+        () => clients.filter(client => client.organizationId === draftProject?.organizationId),
+        [clients, draftProject?.organizationId]
     );
+
+    const selectedProject = filteredProjects.find(project => project.id === selectedProjectId) ?? null;
     const projectCountLabel = `${filteredProjects.length} project${filteredProjects.length === 1 ? "" : "s"}`;
 
     useEffect(() => {
@@ -101,16 +97,16 @@ export default function ProjectsPage({
                     return;
                 }
 
+                const initialOrganizationId =
+                    currentOrganizationId
+                    ?? organizations[0]?.id
+                    ?? nextClients[0]?.organizationId
+                    ?? null;
+                const initialClientId = nextClients.find(client => client.organizationId === initialOrganizationId)?.id ?? null;
+                const initialProjectId = getFirstVisibleProjectId(nextProjects, initialOrganizationId, initialClientId);
+
                 setClients(nextClients);
                 setProjects(nextProjects);
-                setSavedProjects(cloneProjects(nextProjects));
-                setNextId(Math.max(...nextProjects.map(project => project.id), 205) + 1);
-
-                const initialOrganizationId = currentOrganizationId ?? organizations[0]?.id ?? nextClients[0]?.organizationId ?? null;
-                const initialClients = nextClients.filter(client => client.organizationId === initialOrganizationId);
-                const initialClientId = initialClients[0]?.id ?? null;
-                const initialProjectId = getNextVisibleProjectId(nextProjects, initialOrganizationId, initialClientId);
-
                 setSelectedOrganizationId(initialOrganizationId);
                 setSelectedClientId(initialClientId);
                 setSelectedProjectId(initialProjectId);
@@ -128,18 +124,22 @@ export default function ProjectsPage({
         };
     }, [currentOrganizationId, organizations]);
 
-    const closeModals = () => {
+    const closeTransientDialogs = useCallback(() => {
         setValidationDialogOpen(false);
         setValidationIssues([]);
         setWarningDialogOpen(false);
+        setWarningTitle("Delete not available");
         setWarningMessage("");
-        setSwitchDialogOpen(false);
-        setPendingSelectionId(null);
-        setPendingOrganizationId(null);
-        setPendingClientId(null);
-    };
+    }, []);
 
-    const applyFilterSelection = (organizationId, clientId = null) => {
+    const closeEditor = useCallback(() => {
+        setEditorOpen(false);
+        setEditorMode(null);
+        setDraftProject(null);
+        closeTransientDialogs();
+    }, [closeTransientDialogs]);
+
+    const applyFilterSelection = (organizationId, clientId = null, sourceProjects = projects) => {
         const nextOrganizationClients = clients.filter(client => client.organizationId === organizationId);
         const resolvedClientId = clientId != null && nextOrganizationClients.some(client => client.id === clientId)
             ? clientId
@@ -147,282 +147,186 @@ export default function ProjectsPage({
 
         setSelectedOrganizationId(organizationId);
         setSelectedClientId(resolvedClientId);
-        setSelectedProjectId(getNextVisibleProjectId(projects, organizationId, resolvedClientId));
+        setSelectedProjectId(getFirstVisibleProjectId(sourceProjects, organizationId, resolvedClientId));
     };
 
-    const beginEdit = (project) => {
+    const openEditorForExisting = (project) => {
         setSelectedProjectId(project.id);
-        setEditingProjectId(project.id);
+        setEditorOpen(true);
+        setEditorMode("edit");
         setDraftProject({ ...project });
-        setEditingOriginalProject({ ...project });
-        closeModals();
+        closeTransientDialogs();
     };
 
-    const discardCurrentEdit = (nextSelectedId = null) => {
-        const currentEditingId = editingProjectId;
-        const savedProject = savedProjects.find(project => project.id === currentEditingId);
+    const openEditorForNew = () => {
+        const nextClientId = selectedClientId ?? filteredClients[0]?.id ?? null;
+        const nextDraft = createProjectDraft(selectedOrganizationId, nextClientId);
 
-        if (savedProject) {
-            setProjects(currentProjects =>
-                currentProjects.map(project =>
-                    project.id === savedProject.id
-                        ? { ...savedProject }
-                        : project
-                )
-            );
-            setSelectedProjectId(nextSelectedId ?? savedProject.id);
-        } else {
-            setProjects(currentProjects => {
-                const nextProjects = currentProjects.filter(project => project.id !== currentEditingId);
-                setSelectedProjectId(nextSelectedId ?? getNextVisibleProjectId(nextProjects, selectedOrganizationId, selectedClientId, currentEditingId));
-                return nextProjects;
-            });
+        setEditorOpen(true);
+        setEditorMode("add");
+        setDraftProject(nextDraft);
+        closeTransientDialogs();
+    };
+
+    const handleAddProject = () => {
+        if (editorOpen) {
+            return;
         }
 
-        setEditingProjectId(null);
-        setDraftProject(null);
-        setEditingOriginalProject(null);
-        return Boolean(savedProject);
+        openEditorForNew();
     };
 
-    const commitDraft = (nextSelectedId = selectedProjectId) => {
+    const handleEditProject = () => {
+        if (selectedProject && !editorOpen) {
+            openEditorForExisting(selectedProject);
+        }
+    };
+
+    const handleRowSelect = (project) => {
+        setSelectedProjectId(project.id);
+    };
+
+    const handleRowEditRequest = (project) => {
+        if (!editorOpen) {
+            openEditorForExisting(project);
+        }
+    };
+
+    const handleDraftChange = (field, nextValue) => {
+        setDraftProject(current => (current ? {
+            ...current,
+            [field]: nextValue
+        } : current));
+    };
+
+    const handleDraftOrganizationChange = (nextOrganizationId) => {
+        const parsedOrganizationId = nextOrganizationId === "" ? null : Number(nextOrganizationId);
+        const nextClients = clients.filter(client => client.organizationId === parsedOrganizationId);
+
+        setDraftProject(current => (current ? {
+            ...current,
+            organizationId: parsedOrganizationId,
+            clientId: nextClients[0]?.id ?? null
+        } : current));
+    };
+
+    const handleDraftClientChange = (nextClientId) => {
+        const parsedClientId = nextClientId === "" ? null : Number(nextClientId);
+        handleDraftChange("clientId", parsedClientId);
+    };
+
+    const handleOrganizationChange = (nextOrganizationId) => {
+        applyFilterSelection(Number(nextOrganizationId));
+        closeTransientDialogs();
+    };
+
+    const handleClientChange = (nextClientId) => {
+        const parsedClientId = nextClientId === "" ? null : Number(nextClientId);
+
+        setSelectedClientId(parsedClientId);
+        setSelectedProjectId(getFirstVisibleProjectId(projects, selectedOrganizationId, parsedClientId));
+        closeTransientDialogs();
+    };
+
+    const handleDeleteProject = async () => {
+        if (!selectedProject || editorOpen) {
+            return;
+        }
+
+        const projectId = selectedProject.id;
+        try {
+            await apiDeleteProject(projectId);
+            const nextProjects = projects.filter(project => project.id !== projectId);
+
+            setProjects(nextProjects);
+            setSelectedProjectId(getFirstVisibleProjectId(nextProjects, selectedOrganizationId, selectedClientId));
+            closeTransientDialogs();
+        } catch (error) {
+            const message =
+                error?.response?.data?.message ??
+                error?.response?.data?.error ??
+                error?.message ??
+                "Project is used in the system and cannot be deleted.";
+            setWarningTitle("Delete not available");
+            setWarningMessage(message);
+            setWarningDialogOpen(true);
+        }
+    };
+
+    const handleSaveProject = async () => {
         if (!draftProject) {
-            return false;
+            return;
         }
 
         const issues = validateProject(draftProject);
         if (issues.length > 0) {
             setValidationIssues(issues);
             setValidationDialogOpen(true);
-            return false;
-        }
-
-        const nextProjects = projects.map(project =>
-            project.id === draftProject.id
-                ? { ...draftProject }
-                : project
-        );
-
-        const nextSavedProjects = savedProjects.some(project => project.id === draftProject.id)
-            ? savedProjects.map(project =>
-                project.id === draftProject.id
-                    ? { ...draftProject }
-                    : project
-            )
-            : [...savedProjects, { ...draftProject }];
-
-        setProjects(nextProjects);
-        setSavedProjects(cloneProjects(nextSavedProjects));
-        setSelectedProjectId(nextSelectedId);
-        setEditingProjectId(null);
-        setDraftProject(null);
-        setEditingOriginalProject(null);
-        closeModals();
-        return true;
-    };
-
-    const handleAddProject = () => {
-        const nextClientId = selectedClientId ?? filteredClients[0]?.id ?? null;
-        const nextProject = createProject(nextId, selectedOrganizationId, nextClientId);
-
-        setProjects(currentProjects => [...currentProjects, nextProject]);
-        setSelectedProjectId(nextProject.id);
-        setEditingProjectId(nextProject.id);
-        setDraftProject({ ...nextProject });
-        setEditingOriginalProject(null);
-        setNextId(currentId => currentId + 1);
-        closeModals();
-    };
-
-    const handleEditOrSave = () => {
-        if (editingProjectId != null) {
-            commitDraft();
             return;
         }
 
-        if (selectedProject) {
-            beginEdit(selectedProject);
-        }
-    };
+        try {
+            const isNewProject = editorMode === "add";
+            const payload = {
+                organizationId: draftProject.organizationId,
+                clientId: draftProject.clientId,
+                shortName: draftProject.shortName.trim(),
+                fullName: draftProject.fullName.trim(),
+                description: draftProject.description ?? ""
+            };
+            const savedProject = isNewProject
+                ? await apiCreateProject(payload)
+                : await apiUpdateProject(draftProject.id, payload);
+            const normalizedProject = {
+                ...draftProject,
+                ...savedProject,
+                ...payload
+            };
 
-    const handleRowEditRequest = (project) => {
-        if (editingProjectId != null && project.id !== editingProjectId) {
-            if (isDraftDirty) {
-                setPendingSelectionId(project.id);
-                setSwitchDialogOpen(true);
-                return;
+            const nextProjects = isNewProject
+                ? [...projects, normalizedProject]
+                : projects.map(project =>
+                    project.id === draftProject.id
+                        ? normalizedProject
+                        : project
+                );
+
+            setProjects(nextProjects);
+            if (
+                normalizedProject.organizationId === selectedOrganizationId
+                && normalizedProject.clientId === selectedClientId
+            ) {
+                setSelectedProjectId(normalizedProject.id);
+            } else {
+                setSelectedProjectId(getFirstVisibleProjectId(nextProjects, selectedOrganizationId, selectedClientId));
             }
-
-            discardCurrentEdit(project.id);
-            beginEdit(project);
-            return;
-        }
-
-        beginEdit(project);
-    };
-
-    const handleCancel = () => {
-        if (editingProjectId == null) {
-            return;
-        }
-
-        discardCurrentEdit();
-        closeModals();
-    };
-
-    const handleRowSelect = (project) => {
-        if (editingProjectId != null && project.id !== editingProjectId) {
-            if (!isDraftDirty) {
-                discardCurrentEdit(project.id);
-                closeModals();
-                return;
-            }
-
-            setPendingSelectionId(project.id);
-            setSwitchDialogOpen(true);
-            return;
-        }
-
-        setSelectedProjectId(project.id);
-    };
-
-    const handleDraftChange = (field, nextValue) => {
-        if (!draftProject) {
-            return;
-        }
-
-        setDraftProject({
-            ...draftProject,
-            [field]: nextValue
-        });
-        closeModals();
-    };
-
-    const handleOrganizationChange = (nextOrganizationId) => {
-        const parsedOrganizationId = Number(nextOrganizationId);
-
-        if (editingProjectId != null && isDraftDirty) {
-            setPendingOrganizationId(parsedOrganizationId);
-            setSwitchDialogOpen(true);
-            return;
-        }
-
-        if (editingProjectId != null) {
-            discardCurrentEdit();
-        }
-
-        applyFilterSelection(parsedOrganizationId);
-        closeModals();
-    };
-
-    const handleClientChange = (nextClientId) => {
-        const parsedClientId = nextClientId === "" ? null : Number(nextClientId);
-
-        if (editingProjectId != null && isDraftDirty) {
-            setPendingClientId(parsedClientId);
-            setSwitchDialogOpen(true);
-            return;
-        }
-
-        if (editingProjectId != null) {
-            discardCurrentEdit();
-        }
-
-        if (parsedClientId == null) {
-            setSelectedClientId(null);
-            setSelectedProjectId(null);
-            closeModals();
-            return;
-        }
-
-        setSelectedClientId(parsedClientId);
-        setSelectedProjectId(getNextVisibleProjectId(projects, selectedOrganizationId, parsedClientId));
-        closeModals();
-    };
-
-    const handleDeleteProject = () => {
-        if (!selectedProject) {
-            return;
-        }
-
-        if (isProjectLinkedInSystem(selectedProject)) {
-            setWarningMessage("Project is used in the system and cannot be deleted.");
+            closeEditor();
+        } catch (error) {
+            const message =
+                error?.response?.data?.message ??
+                error?.response?.data?.error ??
+                error?.message ??
+                "Unable to save project.";
+            setWarningTitle("Save not available");
+            setWarningMessage(message);
             setWarningDialogOpen(true);
+        }
+    };
+
+    const handleCancelProject = () => {
+        if (!editorOpen) {
             return;
         }
 
-        setProjects(currentProjects =>
-            currentProjects.filter(project => project.id !== selectedProject.id)
-        );
-        setSavedProjects(currentSavedProjects =>
-            currentSavedProjects.filter(project => project.id !== selectedProject.id)
-        );
-
-        if (editingProjectId === selectedProject.id) {
-            setEditingProjectId(null);
-            setDraftProject(null);
-        }
-
-        const remaining = filteredProjects.filter(project => project.id !== selectedProject.id);
-        setSelectedProjectId(remaining[0]?.id ?? null);
-        closeModals();
-    };
-
-    const handleSaveFromSwitchDialog = () => {
-        if (commitDraft(pendingSelectionId)) {
-            if (pendingOrganizationId != null) {
-                applyFilterSelection(pendingOrganizationId, pendingClientId);
-            } else if (pendingClientId != null) {
-                applyFilterSelection(selectedOrganizationId, pendingClientId);
-            } else if (pendingSelectionId != null) {
-                setSelectedProjectId(pendingSelectionId);
-            }
-
-            setSwitchDialogOpen(false);
-            setPendingSelectionId(null);
-            setPendingOrganizationId(null);
-            setPendingClientId(null);
-        }
-    };
-
-    const handleDiscardFromSwitchDialog = () => {
-        if (editingProjectId == null) {
-            setSwitchDialogOpen(false);
-            setPendingSelectionId(null);
-            setPendingOrganizationId(null);
-            setPendingClientId(null);
-            return;
-        }
-
-        discardCurrentEdit(pendingSelectionId);
-
-        if (pendingOrganizationId != null) {
-            applyFilterSelection(pendingOrganizationId, pendingClientId);
-        } else if (pendingClientId != null) {
-            applyFilterSelection(selectedOrganizationId, pendingClientId);
-        } else if (pendingSelectionId != null) {
-            setSelectedProjectId(pendingSelectionId);
-        }
-
-        setSwitchDialogOpen(false);
-        setPendingSelectionId(null);
-        setPendingOrganizationId(null);
-        setPendingClientId(null);
-    };
-
-    const handleStayEditing = () => {
-        setSwitchDialogOpen(false);
-        setPendingSelectionId(null);
-        setPendingOrganizationId(null);
-        setPendingClientId(null);
+        closeEditor();
     };
 
     useEffect(() => {
-        handleCancelRef.current = handleCancel;
+        handleCancelRef.current = handleCancelProject;
     });
 
     useEffect(() => {
-        if (editingProjectId == null || validationDialogOpen || warningDialogOpen || switchDialogOpen) {
+        if (!editorOpen || validationDialogOpen || warningDialogOpen) {
             return undefined;
         }
 
@@ -437,11 +341,10 @@ export default function ProjectsPage({
 
         window.addEventListener("keydown", handleKeyDown);
         return () => window.removeEventListener("keydown", handleKeyDown);
-    }, [editingProjectId, switchDialogOpen, validationDialogOpen, warningDialogOpen]);
+    }, [editorOpen, validationDialogOpen, warningDialogOpen]);
 
     const renderRow = (project) => {
         const isSelected = project.id === selectedProjectId;
-        const isEditingRow = project.id === editingProjectId;
 
         return (
             <tr
@@ -451,37 +354,17 @@ export default function ProjectsPage({
                 onDoubleClick={() => handleRowEditRequest(project)}
             >
                 <td>
-                    {isEditingRow ? (
-                        <input
-                            className="app-master-data-input organizations-input"
-                            type="text"
-                            value={draftProject?.shortName ?? ""}
-                            onChange={event => handleDraftChange("shortName", event.target.value)}
-                            onClick={event => event.stopPropagation()}
-                        />
-                    ) : (
-                        <span className="organizations-readonly-cell">{project.shortName}</span>
-                    )}
+                    <span className="organizations-readonly-cell">{project.shortName}</span>
                 </td>
                 <td>
-                    {isEditingRow ? (
-                        <input
-                            className="app-master-data-input organizations-input"
-                            type="text"
-                            value={draftProject?.fullName ?? ""}
-                            onChange={event => handleDraftChange("fullName", event.target.value)}
-                            onClick={event => event.stopPropagation()}
-                        />
-                    ) : (
-                        <span className="organizations-readonly-cell">{project.fullName}</span>
-                    )}
+                    <span className="organizations-readonly-cell">{project.fullName}</span>
                 </td>
             </tr>
         );
     };
 
     return (
-        <div className="tracking-main organizations-main" data-dirty={isDirty ? "true" : "false"}>
+        <div className="tracking-main organizations-main">
             <header className="tracking-topbar">
                 <div className="tracking-topbar-main">
                     <div>
@@ -504,7 +387,7 @@ export default function ProjectsPage({
                     >
                         {organizations.map(organization => (
                             <option key={organization.id} value={String(organization.id)}>
-                                {organization.shortName} - {organization.fullName}
+                                {organization.shortName}
                             </option>
                         ))}
                     </select>
@@ -526,7 +409,7 @@ export default function ProjectsPage({
                         ) : (
                             filteredClients.map(client => (
                                 <option key={client.id} value={String(client.id)}>
-                                    {client.shortName} - {client.fullName}
+                                    {client.shortName}
                                 </option>
                             ))
                         )}
@@ -543,45 +426,32 @@ export default function ProjectsPage({
                         </div>
 
                         <div className="clients-toolbar">
-                            {editingProjectId != null ? (
-                                <>
-                                    <button type="button" className="tracking-save-button" onClick={handleEditOrSave}>
-                                        Save
-                                    </button>
-                                    <button type="button" className="tracking-save-button" onClick={handleCancel}>
-                                        Cancel
-                                    </button>
-                                </>
-                            ) : (
-                                <>
-                                    <div className="organizations-toolbar-actions">
-                                        <button
-                                            type="button"
-                                            className="tracking-save-button"
-                                            onClick={handleAddProject}
-                                            disabled={!selectedClient}
-                                        >
-                                            Add
-                                        </button>
-                                        <button
-                                            type="button"
-                                            className="tracking-save-button"
-                                            onClick={handleEditOrSave}
-                                            disabled={!selectedProject}
-                                        >
-                                            Edit
-                                        </button>
-                                    </div>
-                                    <button
-                                        type="button"
-                                        className="organizations-delete-button organizations-delete-button-separated"
-                                        onClick={handleDeleteProject}
-                                        disabled={!selectedProject}
-                                    >
-                                        Delete
-                                    </button>
-                                </>
-                            )}
+                            <div className="organizations-toolbar-actions">
+                                <button
+                                    type="button"
+                                    className="tracking-save-button"
+                                    onClick={handleAddProject}
+                                    disabled={editorOpen || !selectedClientId}
+                                >
+                                    Add
+                                </button>
+                                <button
+                                    type="button"
+                                    className="tracking-save-button"
+                                    onClick={handleEditProject}
+                                    disabled={editorOpen || !selectedProject}
+                                >
+                                    Edit
+                                </button>
+                            </div>
+                            <button
+                                type="button"
+                                className="organizations-delete-button organizations-delete-button-separated"
+                                onClick={handleDeleteProject}
+                                disabled={editorOpen || !selectedProject}
+                            >
+                                Delete
+                            </button>
                         </div>
                     </div>
 
@@ -602,6 +472,87 @@ export default function ProjectsPage({
                     </div>
                 </section>
             </div>
+
+            {editorOpen && draftProject && (
+                <div className="tracking-modal-overlay" role="presentation">
+                    <div
+                        className="tracking-modal tracking-modal-confirm tracking-modal-client-editor"
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="projects-editor-title"
+                    >
+                        <div className="tracking-modal-header">
+                            <h3 id="projects-editor-title">{editorMode === "add" ? "Add Project" : "Edit Project"}</h3>
+                        </div>
+                        <div className="tracking-modal-body">
+                            <div className="tracking-modal-fields">
+                                <label className="tracking-modal-field">
+                                    <span>Organization</span>
+                                    <select
+                                        value={String(draftProject.organizationId ?? "")}
+                                        onChange={event => handleDraftOrganizationChange(event.target.value)}
+                                    >
+                                        <option value="">Select organization</option>
+                                        {organizations.map(organization => (
+                                            <option key={organization.id} value={String(organization.id)}>
+                                                {organization.shortName}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </label>
+
+                                <label className="tracking-modal-field">
+                                    <span>Client</span>
+                                    <select
+                                        value={String(draftProject.clientId ?? "")}
+                                        onChange={event => handleDraftClientChange(event.target.value)}
+                                        disabled={draftClients.length === 0}
+                                    >
+                                        <option value="">
+                                            {draftClients.length === 0 ? "No clients" : "Select client"}
+                                        </option>
+                                        {draftClients.map(client => (
+                                            <option key={client.id} value={String(client.id)}>
+                                                {client.shortName}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </label>
+
+                                <label className="tracking-modal-field">
+                                    <span>Short Name</span>
+                                    <input
+                                        type="text"
+                                        value={draftProject.shortName ?? ""}
+                                        onChange={event => handleDraftChange("shortName", event.target.value)}
+                                    />
+                                </label>
+
+                                <label className="tracking-modal-field">
+                                    <span>Full Name</span>
+                                    <input
+                                        type="text"
+                                        value={draftProject.fullName ?? ""}
+                                        onChange={event => handleDraftChange("fullName", event.target.value)}
+                                    />
+                                </label>
+                            </div>
+                        </div>
+                        <div className="tracking-modal-actions">
+                            <button type="button" className="tracking-modal-button" onClick={handleSaveProject}>
+                                Save
+                            </button>
+                            <button
+                                type="button"
+                                className="tracking-modal-button tracking-modal-button-secondary"
+                                onClick={handleCancelProject}
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {validationDialogOpen && (
                 <div className="tracking-modal-overlay" role="presentation">
@@ -629,7 +580,7 @@ export default function ProjectsPage({
                 <div className="tracking-modal-overlay" role="presentation">
                     <div className="tracking-modal tracking-modal-confirm" role="dialog" aria-modal="true" aria-labelledby="projects-warning-title">
                         <div className="tracking-modal-header">
-                            <h3 id="projects-warning-title">Delete not available</h3>
+                            <h3 id="projects-warning-title">{warningTitle}</h3>
                         </div>
                         <div className="tracking-modal-body">
                             <p className="tracking-modal-text">{warningMessage}</p>
@@ -637,32 +588,6 @@ export default function ProjectsPage({
                         <div className="tracking-modal-actions">
                             <button type="button" className="tracking-modal-button" onClick={() => setWarningDialogOpen(false)}>
                                 OK
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {switchDialogOpen && (
-                <div className="tracking-modal-overlay" role="presentation">
-                    <div className="tracking-modal tracking-modal-confirm" role="dialog" aria-modal="true" aria-labelledby="projects-switch-title">
-                        <div className="tracking-modal-header">
-                            <h3 id="projects-switch-title">Unsaved changes</h3>
-                        </div>
-                        <div className="tracking-modal-body">
-                            <p className="tracking-modal-text">
-                                There are unsaved changes for the current project. What do you want to do?
-                            </p>
-                        </div>
-                        <div className="tracking-modal-actions">
-                            <button type="button" className="tracking-modal-button" onClick={handleSaveFromSwitchDialog}>
-                                Save changes
-                            </button>
-                            <button type="button" className="tracking-modal-button" onClick={handleDiscardFromSwitchDialog}>
-                                Discard changes
-                            </button>
-                            <button type="button" className="tracking-modal-button tracking-modal-button-secondary" onClick={handleStayEditing}>
-                                Stay
                             </button>
                         </div>
                     </div>

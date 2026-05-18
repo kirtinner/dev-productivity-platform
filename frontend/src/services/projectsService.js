@@ -1,10 +1,20 @@
-import { initialProjects } from "../mock/projectRecords";
-
-function cloneProjects(items) {
-    return items.map(item => ({ ...item }));
-}
+import api from "../api/api";
 
 export async function getProjects() {
-    return cloneProjects(initialProjects);
+    const response = await api.get("/projects");
+    return response.data;
 }
 
+export async function createProject(payload) {
+    const response = await api.post("/projects", payload);
+    return response.data;
+}
+
+export async function updateProject(id, payload) {
+    const response = await api.put(`/projects/${id}`, payload);
+    return response.data;
+}
+
+export async function deleteProject(id) {
+    await api.delete(`/projects/${id}`);
+}

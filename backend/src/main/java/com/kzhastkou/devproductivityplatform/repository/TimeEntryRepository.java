@@ -17,4 +17,12 @@ public interface TimeEntryRepository extends JpaRepository<TimeEntry, Long> {
     List<TimeEntry> findByDeveloperIdAndTaskId(Long developerId, Long taskId);
 
     void deleteByDeveloperIdAndDate(Long developerId, LocalDate date);
+
+    boolean existsByOrganizationId(Long organizationId);
+
+    boolean existsByTaskClientId(Long clientId);
+
+    boolean existsByTaskProjectId(Long projectId);
+
+    boolean existsByTaskId(Long taskId);
 }
