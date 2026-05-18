@@ -1,6 +1,8 @@
-export function createLocalWorklogEntry(date, nextId) {
+export function createLocalWorklogEntry(date, nextId, organizationId = null) {
     return {
         id: `local-${date}-${nextId}`,
+        organizationId,
+        organizationName: "",
         clientId: null,
         clientName: "New Client",
         taskId: null,

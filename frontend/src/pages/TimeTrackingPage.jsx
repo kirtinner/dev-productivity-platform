@@ -1,16 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import MonthlySummaryTable from "../components/MonthlySummaryTable";
-import TaskDetailsPanel from "../components/TaskDetailsPanel";
 import WorklogEntriesTable from "../components/WorklogEntriesTable";
 import { createLocalWorklogEntry } from "../utils/timeTrackingEntries";
 import { buildCalendarDays, formatMonthYear } from "../utils/timeTrackingDates";
 import { validateWorklogDay } from "../utils/timeTrackingValidation";
 import {
+    createTimeEntry,
+    deleteTimeEntry,
     getClients,
     getTasks,
     getTimeEntriesByDate,
     getTimeEntriesByMonth,
-    saveTimeEntriesForDate
+    updateTimeEntry
 } from "../services/timeTrackingService";
 import "../styles/timeTracking.css";
 
@@ -59,26 +60,157 @@ function mergeEntriesForDate(currentEntries, date, nextDayEntries) {
     return nextEntries;
 }
 
-function areWorklogEntryContentsEqual(left, right) {
-    if (!left || !right) {
-        return false;
-    }
-
-    return left.clientId === right.clientId
-        && left.taskId === right.taskId
-        && Number(left.hours) === Number(right.hours)
-        && (left.comment ?? "") === (right.comment ?? "");
+function isValidHoursInput(value) {
+    return value === "" || /^\d*\.?\d*$/.test(value);
 }
 
-function getEntryModifiedState(nextEntry, originalEntry) {
-    if (!originalEntry) {
-        return true;
+function sameId(left, right) {
+    return left != null && right != null && String(left) === String(right);
+}
+
+function toOptionalNumber(value) {
+    if (value == null || value === "") {
+        return null;
     }
 
-    return originalEntry.modified || !areWorklogEntryContentsEqual(nextEntry, originalEntry);
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+}
+
+function WorklogEntryModal({
+    mode,
+    draftEntry,
+    organizations,
+    clients,
+    tasks,
+    onChange,
+    onSave,
+    onCancel
+}) {
+    const availableClients = draftEntry.organizationId == null
+        ? []
+        : clients.filter(client => sameId(client.organizationId, draftEntry.organizationId));
+    const availableTasks = draftEntry.clientId == null
+        ? []
+        : tasks.filter(task =>
+            sameId(task.clientId, draftEntry.clientId)
+            && (draftEntry.organizationId == null || sameId(task.organizationId, draftEntry.organizationId))
+        );
+    const selectedTaskName = availableTasks.find(task => sameId(task.id, draftEntry.taskId))?.name
+        ?? draftEntry.taskName
+        ?? "";
+    const handleSubmit = (event) => {
+        event.preventDefault();
+        onSave();
+    };
+
+    return (
+        <div className="tracking-modal-overlay" role="presentation">
+            <form
+                onSubmit={handleSubmit}
+                className="tracking-modal tracking-modal-confirm tracking-modal-worklog-editor"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="worklog-entry-editor-title"
+            >
+                <div className="tracking-modal-header">
+                    <h3 id="worklog-entry-editor-title">{mode === "add" ? "Add Worklog Entry" : "Edit Worklog Entry"}</h3>
+                </div>
+                <div className="tracking-modal-body">
+                    <div className="tracking-modal-fields">
+                        <label className="tracking-modal-field">
+                            <span>Organization</span>
+                            <select
+                                value={String(draftEntry.organizationId ?? "")}
+                                onChange={event => onChange("organization", event.target.value)}
+                            >
+                                <option value=""></option>
+                                {organizations.map(organization => (
+                                    <option key={organization.id} value={String(organization.id)}>
+                                        {organization.shortName}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+
+                        <label className="tracking-modal-field">
+                            <span>Client</span>
+                            <select
+                                value={String(draftEntry.clientId ?? "")}
+                                onChange={event => onChange("client", event.target.value)}
+                                disabled={availableClients.length === 0}
+                            >
+                                <option value=""></option>
+                                {availableClients.map(client => (
+                                    <option key={client.id} value={String(client.id)}>
+                                        {client.name}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+
+                        <label className="tracking-modal-field tracking-modal-worklog-task-field">
+                            <span>Task</span>
+                            <select
+                                value={String(draftEntry.taskId ?? "")}
+                                onChange={event => onChange("task", event.target.value)}
+                                disabled={availableTasks.length === 0}
+                                title={selectedTaskName}
+                            >
+                                <option value=""></option>
+                                {availableTasks.map(task => (
+                                    <option key={task.id} value={String(task.id)} title={task.name}>
+                                        {task.name}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+
+                        <label className="tracking-modal-field">
+                            <span>Hours</span>
+                            <input
+                                type="number"
+                                min="0"
+                                step="0.25"
+                                inputMode="decimal"
+                                value={draftEntry.hours}
+                                onChange={event => {
+                                    if (isValidHoursInput(event.target.value)) {
+                                        onChange("hours", event.target.value);
+                                    }
+                                }}
+                            />
+                        </label>
+
+                        <label className="tracking-modal-field">
+                            <span>Comment</span>
+                            <textarea
+                                rows="4"
+                                value={draftEntry.comment ?? ""}
+                                onChange={event => onChange("comment", event.target.value)}
+                            />
+                        </label>
+                    </div>
+                </div>
+                <div className="tracking-modal-actions">
+                    <button type="submit" className="tracking-modal-button">
+                        Save
+                    </button>
+                    <button
+                        type="button"
+                        className="tracking-modal-button tracking-modal-button-secondary"
+                        onClick={onCancel}
+                    >
+                        Cancel
+                    </button>
+                </div>
+            </form>
+        </div>
+    );
 }
 
 export default function TimeTrackingPage({
+    organizations = [],
     userSettings = { currentOrganizationId: null, dailyHoursLimit: 8 }
 }) {
     const today = new Date();
@@ -90,15 +222,10 @@ export default function TimeTrackingPage({
     const [selectedYear, setSelectedYear] = useState(today.getFullYear());
     const [selectedDate, setSelectedDate] = useState(formatDateKey(today));
     const [selectedEntryId, setSelectedEntryId] = useState(null);
-    const [editingEntryId, setEditingEntryId] = useState(null);
-    const [editingOriginalEntry, setEditingOriginalEntry] = useState(null);
-    const [editingEntryIsNew, setEditingEntryIsNew] = useState(false);
-    const [editingFallbackSelectionId, setEditingFallbackSelectionId] = useState(null);
+    const [entryEditorOpen, setEntryEditorOpen] = useState(false);
+    const [entryEditorMode, setEntryEditorMode] = useState(null);
+    const [draftEntry, setDraftEntry] = useState(null);
     const [localIdSeed, setLocalIdSeed] = useState(1);
-    const [pendingSelectionId, setPendingSelectionId] = useState(null);
-    const [switchDialogOpen, setSwitchDialogOpen] = useState(false);
-    const [pendingDateSelection, setPendingDateSelection] = useState(null);
-    const [dateSwitchConfirmOpen, setDateSwitchConfirmOpen] = useState(false);
     const [validationDialogOpen, setValidationDialogOpen] = useState(false);
     const [validationIssues, setValidationIssues] = useState([]);
     const [apiErrorMessage, setApiErrorMessage] = useState("");
@@ -109,13 +236,8 @@ export default function TimeTrackingPage({
     const calendarDays = buildCalendarDays(selectedMonth, selectedYear);
     const selectedMonthLabel = formatMonthYear(selectedMonth, selectedYear);
     const filteredEntries = entries.filter(entry => entry.date === selectedDate);
-    const selectedEntry = filteredEntries.find(entry => entry.id === selectedEntryId);
-    const selectedDayHasUnsavedChanges = entries.some(entry => entry.date === selectedDate && entry.modified);
-    const editingCurrentEntry = entries.find(entry => entry.id === editingEntryId) ?? null;
-    const isEditingEntryDirty = Boolean(
-        editingEntryId != null &&
-        (editingEntryIsNew || editingOriginalEntry == null || !areWorklogEntryContentsEqual(editingCurrentEntry, editingOriginalEntry))
-    );
+    const selectedEntry = filteredEntries.find(entry => sameId(entry.id, selectedEntryId));
+    const currentOrganizationId = toOptionalNumber(userSettings.currentOrganizationId);
 
     useEffect(() => {
         let active = true;
@@ -169,10 +291,9 @@ export default function TimeTrackingPage({
                     const nextSelectedDate = nextEntries[0]?.date ?? formatDateKey(new Date(selectedYear, selectedMonth, 1));
                     setSelectedDate(nextSelectedDate);
                     setSelectedEntryId(null);
-                    setEditingEntryId(null);
-                    setEditingOriginalEntry(null);
-                    setEditingEntryIsNew(false);
-                    setEditingFallbackSelectionId(null);
+                    setEntryEditorOpen(false);
+                    setEntryEditorMode(null);
+                    setDraftEntry(null);
                 }
 
                 setApiErrorMessage("");
@@ -208,15 +329,21 @@ export default function TimeTrackingPage({
         }
     };
 
+    const reloadMonthEntries = async (nextSelectedEntryId = selectedEntryId) => {
+        const nextEntries = await getTimeEntriesByMonth(selectedYear, selectedMonth);
+
+        setEntries(nextEntries);
+        setSelectedEntryId(nextEntries.some(entry => sameId(entry.id, nextSelectedEntryId)) ? nextSelectedEntryId : null);
+        setApiErrorMessage("");
+        return nextEntries;
+    };
+
     const switchToDate = (date, shouldLoadDayEntries = true) => {
         setSelectedDate(date);
         setSelectedEntryId(null);
-        setEditingEntryId(null);
-        setEditingOriginalEntry(null);
-        setEditingEntryIsNew(false);
-        setEditingFallbackSelectionId(null);
-        setPendingSelectionId(null);
-        setSwitchDialogOpen(false);
+        setEntryEditorOpen(false);
+        setEntryEditorMode(null);
+        setDraftEntry(null);
         clearTransientMessages();
         if (shouldLoadDayEntries) {
             void loadEntriesForDate(date);
@@ -225,12 +352,6 @@ export default function TimeTrackingPage({
 
     const requestDateSwitch = (nextDate, nextMonth = null, nextYear = null) => {
         if (nextDate === selectedDate && nextMonth == null && nextYear == null) {
-            return;
-        }
-
-        if (selectedDayHasUnsavedChanges) {
-            setPendingDateSelection({ date: nextDate, month: nextMonth, year: nextYear });
-            setDateSwitchConfirmOpen(true);
             return;
         }
 
@@ -273,61 +394,24 @@ export default function TimeTrackingPage({
         requestDateSwitch(formatDateKey(nextDate), nextDate.getMonth(), nextDate.getFullYear());
     };
 
-    const updateEditableEntry = (entryId, updater) => {
-        setEntries(currentEntries =>
-            currentEntries.map(entry => {
-                if (entry.id !== entryId) {
-                    return entry;
-                }
-
-                const nextEntry = updater(entry);
-                const modified = editingEntryIsNew
-                    ? true
-                    : getEntryModifiedState(nextEntry, editingOriginalEntry?.id === entryId ? editingOriginalEntry : null);
-
-                return {
-                    ...nextEntry,
-                    modified
-                };
-            })
-        );
-    };
-
-    const beginEntryEdit = (entry, previousSelectionId = entry.id, isNewEntry = false) => {
-        setSelectedEntryId(entry.id);
-        setEditingEntryId(entry.id);
-        setEditingOriginalEntry(entry ? { ...entry } : null);
-        setEditingEntryIsNew(isNewEntry);
-        setEditingFallbackSelectionId(previousSelectionId);
-        clearTransientMessages();
-    };
-
-    const getEditingDayEntries = (sourceEntries = entries) =>
-        sourceEntries.filter(entry => entry.date === selectedDate);
-
     const handleSelectEntry = (entryId) => {
-        if (editingEntryId != null && entryId !== editingEntryId) {
-            if (isEditingEntryDirty) {
-                setPendingSelectionId(entryId);
-                setSwitchDialogOpen(true);
-                return;
-            }
-
-            const selected = entries.find(entry => entry.id === entryId);
-            if (selected) {
-                setSelectedEntryId(entryId);
-                setEditingEntryId(null);
-                setEditingOriginalEntry(null);
-                setEditingEntryIsNew(false);
-                setEditingFallbackSelectionId(null);
-                setPendingSelectionId(null);
-                setSwitchDialogOpen(false);
-                clearTransientMessages();
-            }
-            return;
-        }
-
         setSelectedEntryId(entryId);
+    };
+
+    const createDraftFromEntry = (entry) => ({
+        ...entry,
+        hours: entry.hours === 0 ? "" : String(entry.hours),
+        comment: entry.comment ?? ""
+    });
+
+    const openEntryEditor = (mode, entry) => {
+        setEntryEditorMode(mode);
+        setDraftEntry(createDraftFromEntry(entry));
+        setEntryEditorOpen(true);
+        if (mode === "edit") {
+            setSelectedEntryId(entry.id);
+        }
+        clearTransientMessages();
     };
 
     const handleRowEditRequest = (entryId) => {
@@ -336,183 +420,216 @@ export default function TimeTrackingPage({
             return;
         }
 
-        if (editingEntryId != null && entryId === editingEntryId) {
+        openEntryEditor("edit", targetEntry);
+    };
+
+    const handleDraftEntryChange = (field, value) => {
+        if (!draftEntry) {
             return;
         }
 
-        if (editingEntryId != null && entryId !== editingEntryId) {
-            if (isEditingEntryDirty) {
-                setPendingSelectionId(entryId);
-                setSwitchDialogOpen(true);
+        if (field === "comment" || field === "hours") {
+            setDraftEntry(current => (current ? { ...current, [field]: value } : current));
+            return;
+        }
+
+        if (field === "organization") {
+            if (value === "") {
+                setDraftEntry(current => (current ? {
+                    ...current,
+                    organizationId: null,
+                    organizationName: "",
+                    clientId: null,
+                    clientName: "",
+                    taskId: null,
+                    taskName: ""
+                } : current));
                 return;
             }
 
-            setSelectedEntryId(entryId);
-            beginEntryEdit(targetEntry, entryId, false);
-            setPendingSelectionId(null);
-            setSwitchDialogOpen(false);
+            const organizationId = toOptionalNumber(value);
+            const selectedOrganization = organizations.find(organization => sameId(organization.id, organizationId));
+
+            setDraftEntry(current => (current ? {
+                ...current,
+                organizationId: selectedOrganization?.id ?? null,
+                organizationName: selectedOrganization?.shortName ?? "",
+                clientId: null,
+                clientName: "",
+                taskId: null,
+                taskName: ""
+            } : current));
             return;
         }
 
-        beginEntryEdit(targetEntry, selectedEntryId ?? entryId, false);
-    };
-
-    const handleEntryHoursChange = (entryId, nextHours) => {
-        updateEditableEntry(entryId, entry => ({ ...entry, hours: nextHours }));
-    };
-
-    const handleEntryMetaChange = (entryId, field, value) => {
-        updateEditableEntry(entryId, entry => {
-            if (field === "comment") {
-                return {
-                    ...entry,
-                    comment: value
-                };
-            }
-
-            if (field === "client") {
-                if (value === "") {
-                    return {
-                        ...entry,
-                        clientId: null,
-                        clientName: "New Client",
-                        taskId: null,
-                        taskName: ""
-                    };
-                }
-
-                const clientId = Number(value);
-                const selectedClient = clients.find(client => client.id === clientId);
-
-                return {
-                    ...entry,
-                    clientId: selectedClient?.id ?? null,
-                    clientName: selectedClient?.name ?? "New Client",
+        if (field === "client") {
+            if (value === "") {
+                setDraftEntry(current => (current ? {
+                    ...current,
+                    clientId: null,
+                    clientName: "",
                     taskId: null,
                     taskName: ""
-                };
+                } : current));
+                return;
             }
 
-            if (field === "task") {
-                if (value === "") {
-                    return {
-                        ...entry,
-                        taskId: null,
-                        taskName: ""
-                    };
-                }
+            const clientId = toOptionalNumber(value);
+            const selectedClient = clients.find(client => sameId(client.id, clientId));
 
-                const taskId = Number(value);
-                const selectedTask = tasks.find(task => task.id === taskId);
-                const taskMatchesClient =
-                    entry.clientId != null && selectedTask?.clientId === entry.clientId;
-
-                return {
-                    ...entry,
-                    taskId: taskMatchesClient ? selectedTask.id : null,
-                    taskName: taskMatchesClient ? selectedTask.name : ""
-                };
-            }
-
-            return entry;
-        });
-    };
-
-    const handleEntryCommentChange = (nextValue) => {
-        if (!editingEntryId || selectedEntryId !== editingEntryId) {
+            setDraftEntry(current => (current ? {
+                ...current,
+                organizationId: selectedClient?.organizationId ?? current.organizationId ?? null,
+                clientId: selectedClient?.id ?? null,
+                clientName: selectedClient?.name ?? "",
+                taskId: null,
+                taskName: ""
+            } : current));
             return;
         }
 
-        handleEntryMetaChange(editingEntryId, "comment", nextValue);
+        if (field === "task") {
+            if (value === "") {
+                setDraftEntry(current => (current ? {
+                    ...current,
+                    taskId: null,
+                    taskName: ""
+                } : current));
+                return;
+            }
+
+            const taskId = toOptionalNumber(value);
+            const selectedTask = tasks.find(task => sameId(task.id, taskId));
+
+            setDraftEntry(current => (current ? {
+                ...current,
+                organizationId: selectedTask?.organizationId ?? current.organizationId,
+                taskId: selectedTask?.id ?? null,
+                taskName: selectedTask?.name ?? ""
+            } : current));
+        }
     };
 
     const handleAddEntry = () => {
-        const nextEntry = createLocalWorklogEntry(selectedDate, localIdSeed);
+        const currentOrganization = organizations.find(organization => sameId(organization.id, currentOrganizationId));
+        const nextEntry = createLocalWorklogEntry(selectedDate, localIdSeed, currentOrganizationId);
 
-        setEntries(currentEntries => [...currentEntries, nextEntry]);
-        setSelectedEntryId(nextEntry.id);
-        setEditingEntryId(nextEntry.id);
-        setEditingOriginalEntry({ ...nextEntry });
-        setEditingEntryIsNew(true);
-        setEditingFallbackSelectionId(selectedEntryId);
-        setLocalIdSeed(currentSeed => currentSeed + 1);
-        setPendingSelectionId(null);
-        setSwitchDialogOpen(false);
-        clearTransientMessages();
+        openEntryEditor("add", {
+            ...nextEntry,
+            organizationId: currentOrganizationId,
+            organizationName: currentOrganization?.shortName ?? "",
+            clientName: "",
+            hours: "",
+            comment: "",
+            modified: false
+        });
     };
 
-    const handleDeleteEntry = (entryId) => {
+    const handleDeleteEntry = async (entryId) => {
         if (!entryId) {
             return;
         }
 
-        let nextSelection = selectedEntryId;
+        try {
+            await deleteTimeEntry(entryId);
+            const nextEntries = await getTimeEntriesByMonth(selectedYear, selectedMonth);
+            const remainingSameDay = nextEntries.filter(entry => entry.date === selectedDate);
 
-        setEntries(currentEntries => {
-            const remainingEntries = currentEntries.filter(entry => entry.id !== entryId);
-            if (selectedEntryId === entryId) {
-                const remainingSameDay = remainingEntries.filter(entry => entry.date === selectedDate);
-                nextSelection = remainingSameDay[0]?.id ?? null;
-            }
-            return remainingEntries;
-        });
-
-        setSelectedEntryId(nextSelection);
-        if (editingEntryId === entryId) {
-            setEditingEntryId(null);
-            setEditingOriginalEntry(null);
-            setEditingEntryIsNew(false);
-            setEditingFallbackSelectionId(null);
+            setEntries(nextEntries);
+            setSelectedEntryId(remainingSameDay[0]?.id ?? null);
+            setEntryEditorOpen(false);
+            setEntryEditorMode(null);
+            setDraftEntry(null);
+            setApiErrorMessage("");
+            clearTransientMessages();
+        } catch (error) {
+            setApiErrorMessage(getApiErrorMessage(error, "Unable to delete time entry."));
         }
-
-        clearTransientMessages();
-    };
-
-    const resolveEntrySelectionAfterDiscard = () => {
-        if (editingFallbackSelectionId != null && entries.some(entry => entry.id === editingFallbackSelectionId)) {
-            return editingFallbackSelectionId;
-        }
-
-        return entries.find(entry => entry.date === selectedDate && entry.id !== editingEntryId)?.id ?? null;
     };
 
     const cancelEntryEdit = () => {
-        if (!editingEntryId) {
-            return;
-        }
-
-        const currentEditingId = editingEntryId;
-        const originalEntry = editingOriginalEntry;
-
-        if (editingEntryIsNew) {
-            setEntries(currentEntries => currentEntries.filter(entry => entry.id !== currentEditingId));
-        } else {
-            setEntries(currentEntries =>
-                currentEntries.map(entry =>
-                    entry.id === currentEditingId
-                        ? { ...originalEntry }
-                        : entry
-                )
-            );
-        }
-
-        setSelectedEntryId(resolveEntrySelectionAfterDiscard());
-        setEditingEntryId(null);
-        setEditingOriginalEntry(null);
-        setEditingEntryIsNew(false);
-        setEditingFallbackSelectionId(null);
-        setPendingSelectionId(null);
-        setSwitchDialogOpen(false);
+        setEntryEditorOpen(false);
+        setEntryEditorMode(null);
+        setDraftEntry(null);
         clearTransientMessages();
     };
 
-    const saveEditingEntry = () => {
-        if (!editingEntryId) {
-            return true;
+    const validateDraftEntry = (entry, dayEntries) => {
+        const entryIndex = Math.max(0, dayEntries.findIndex(dayEntry => sameId(dayEntry.id, entry.id)));
+        const rowLabel = `Row ${entryIndex + 1}`;
+        const issues = [];
+        const hours = entry.hours === "" ? null : Number(entry.hours);
+
+        if (entry.organizationId == null) {
+            issues.push(`${rowLabel}: Organization is required.`);
         }
 
-        const dayEntries = getEditingDayEntries();
-        const validation = validateWorklogDay(dayEntries, dailyHoursLimit);
+        if (entry.clientId == null) {
+            issues.push(`${rowLabel}: Client is required.`);
+        }
+
+        if (entry.taskId == null) {
+            issues.push(`${rowLabel}: Task is required.`);
+        }
+
+        const selectedClient = clients.find(client => sameId(client.id, entry.clientId));
+        if (entry.clientId != null && !selectedClient) {
+            issues.push(`${rowLabel}: Selected client was not found.`);
+        } else if (selectedClient && !sameId(selectedClient.organizationId, entry.organizationId)) {
+            issues.push(`${rowLabel}: Client does not belong to the selected organization.`);
+        }
+
+        const selectedTask = tasks.find(task => sameId(task.id, entry.taskId));
+        if (entry.taskId != null && !selectedTask) {
+            issues.push(`${rowLabel}: Selected task was not found.`);
+        } else if (selectedTask) {
+            if (!sameId(selectedTask.organizationId, entry.organizationId)) {
+                issues.push(`${rowLabel}: Task does not belong to the selected organization.`);
+            }
+
+            if (!sameId(selectedTask.clientId, entry.clientId)) {
+                issues.push(`${rowLabel}: Task does not belong to the selected client.`);
+            }
+        }
+
+        if (hours == null) {
+            issues.push(`${rowLabel}: Hours is required.`);
+        } else if (!Number.isFinite(hours)) {
+            issues.push(`${rowLabel}: Hours must be a number.`);
+        } else if (hours <= 0) {
+            issues.push(`${rowLabel}: Hours must be greater than 0.`);
+        } else if (hours > dailyHoursLimit) {
+            issues.push(`${rowLabel}: Hours cannot exceed ${dailyHoursLimit}.`);
+        }
+
+        return issues;
+    };
+
+    const normalizeDraftEntry = (entry) => ({
+        ...entry,
+        hours: Number(entry.hours),
+        totalTaskHours: Number(entry.hours),
+        comment: entry.comment ?? "",
+        modified: false
+    });
+
+    const saveEditingEntry = async () => {
+        if (!draftEntry) {
+            return false;
+        }
+
+        const normalizedEntry = normalizeDraftEntry(draftEntry);
+        const nextDayEntries = entryEditorMode === "add"
+            ? [...filteredEntries, normalizedEntry]
+            : filteredEntries.map(entry => sameId(entry.id, normalizedEntry.id) ? normalizedEntry : entry);
+        const draftIssues = validateDraftEntry(draftEntry, nextDayEntries);
+        if (draftIssues.length > 0) {
+            setValidationIssues(draftIssues);
+            setValidationDialogOpen(true);
+            return false;
+        }
+
+        const validation = validateWorklogDay(nextDayEntries, dailyHoursLimit);
 
         if (!validation.isValid) {
             setValidationIssues(validation.issues);
@@ -520,131 +637,26 @@ export default function TimeTrackingPage({
             return false;
         }
 
-        setEditingEntryId(null);
-        setEditingOriginalEntry(null);
-        setEditingEntryIsNew(false);
-        setEditingFallbackSelectionId(null);
-        clearTransientMessages();
-        return true;
-    };
-
-    const handleSaveDay = async () => {
-        const dayEntries = getEditingDayEntries();
-        const validation = validateWorklogDay(dayEntries, dailyHoursLimit);
-
-        if (!validation.isValid) {
-            setValidationIssues(validation.issues);
-            setValidationDialogOpen(true);
-            return;
-        }
-
-        const selectedDayIndex = dayEntries.findIndex(entry => entry.id === selectedEntry?.id);
-
         try {
-            const savedEntries = await saveTimeEntriesForDate(selectedDate, dayEntries);
+            const savedEntry = entryEditorMode === "add"
+                ? await createTimeEntry(normalizedEntry)
+                : await updateTimeEntry(normalizedEntry.id, normalizedEntry);
 
-            setEntries(currentEntries =>
-                mergeEntriesForDate(
-                    currentEntries,
-                    selectedDate,
-                    savedEntries.map(entry => ({
-                        ...entry,
-                        modified: false
-                    }))
-                )
-            );
+            await reloadMonthEntries(savedEntry.id);
+            setEntryEditorOpen(false);
+            setEntryEditorMode(null);
+            setDraftEntry(null);
 
-            setEditingEntryId(null);
-            setEditingOriginalEntry(null);
-            setEditingEntryIsNew(false);
-            setEditingFallbackSelectionId(null);
-            setPendingSelectionId(null);
-            setSwitchDialogOpen(false);
-
-            if (savedEntries.length > 0) {
-                const nextSelectedEntry = savedEntries[selectedDayIndex >= 0 ? selectedDayIndex : 0];
-                setSelectedEntryId(nextSelectedEntry?.id ?? null);
+            if (entryEditorMode === "add") {
+                setLocalIdSeed(currentSeed => currentSeed + 1);
             }
 
-            setApiErrorMessage("");
+            clearTransientMessages();
+            return true;
         } catch (error) {
-            setApiErrorMessage(getApiErrorMessage(error, "Unable to save time entries for the selected day."));
+            setApiErrorMessage(getApiErrorMessage(error, "Unable to save time entry."));
+            return false;
         }
-    };
-
-    const handleConfirmDateSwitch = () => {
-        if (!pendingDateSelection) {
-            setDateSwitchConfirmOpen(false);
-            return;
-        }
-
-        if (pendingDateSelection.month != null) {
-            setSelectedMonth(pendingDateSelection.month);
-        }
-
-        if (pendingDateSelection.year != null) {
-            setSelectedYear(pendingDateSelection.year);
-        }
-
-        switchToDate(
-            pendingDateSelection.date,
-            pendingDateSelection.month == null && pendingDateSelection.year == null
-        );
-        setPendingDateSelection(null);
-        setDateSwitchConfirmOpen(false);
-    };
-
-    const handleCancelDateSwitch = () => {
-        setPendingDateSelection(null);
-        setDateSwitchConfirmOpen(false);
-    };
-
-    const handleSaveFromRowSwitchDialog = () => {
-        if (saveEditingEntry()) {
-            setEditingEntryId(null);
-            setEditingOriginalEntry(null);
-            setEditingEntryIsNew(false);
-            setEditingFallbackSelectionId(null);
-            setSelectedEntryId(pendingSelectionId);
-            setPendingSelectionId(null);
-            setSwitchDialogOpen(false);
-        }
-    };
-
-    const handleDiscardFromRowSwitchDialog = () => {
-        if (!editingEntryId) {
-            setPendingSelectionId(null);
-            setSwitchDialogOpen(false);
-            return;
-        }
-
-        const currentEditingId = editingEntryId;
-        const originalEntry = editingOriginalEntry;
-
-        if (editingEntryIsNew) {
-            setEntries(currentEntries => currentEntries.filter(entry => entry.id !== currentEditingId));
-        } else {
-            setEntries(currentEntries =>
-                currentEntries.map(entry =>
-                    entry.id === currentEditingId
-                        ? { ...originalEntry }
-                        : entry
-                )
-            );
-        }
-
-        setEditingEntryId(null);
-        setEditingOriginalEntry(null);
-        setEditingEntryIsNew(false);
-        setEditingFallbackSelectionId(null);
-        setSelectedEntryId(pendingSelectionId);
-        setPendingSelectionId(null);
-        setSwitchDialogOpen(false);
-    };
-
-    const handleStayEditing = () => {
-        setPendingSelectionId(null);
-        setSwitchDialogOpen(false);
     };
 
     useEffect(() => {
@@ -653,10 +665,8 @@ export default function TimeTrackingPage({
 
     useEffect(() => {
         if (
-            editingEntryId == null ||
-            validationDialogOpen ||
-            dateSwitchConfirmOpen ||
-            switchDialogOpen
+            !entryEditorOpen ||
+            validationDialogOpen
         ) {
             return undefined;
         }
@@ -672,38 +682,15 @@ export default function TimeTrackingPage({
 
         window.addEventListener("keydown", handleKeyDown);
         return () => window.removeEventListener("keydown", handleKeyDown);
-    }, [
-        dateSwitchConfirmOpen,
-        editingEntryId,
-        switchDialogOpen,
-        validationDialogOpen
-    ]);
+    }, [entryEditorOpen, validationDialogOpen]);
 
     return (
-        <div className="tracking-main tracking-time-tracking-main" data-dirty={selectedDayHasUnsavedChanges ? "true" : "false"}>
+        <div className="tracking-main tracking-time-tracking-main">
             <header className="tracking-topbar">
                 <div className="tracking-topbar-main">
                     <div>
                         <h2>Time Tracking</h2>
                         <p>Worklog overview and monthly productivity summary</p>
-                    </div>
-                    <div className="tracking-topbar-actions">
-                        <div
-                            className={[
-                                "tracking-save-status",
-                                selectedDayHasUnsavedChanges ? "tracking-save-status-dirty" : ""
-                            ].filter(Boolean).join(" ")}
-                        >
-                            {selectedDayHasUnsavedChanges ? "Unsaved changes" : "Saved"}
-                        </div>
-                        <button
-                            type="button"
-                            className="tracking-save-button"
-                            onClick={handleSaveDay}
-                            disabled={!selectedDayHasUnsavedChanges}
-                        >
-                            Save
-                        </button>
                     </div>
                 </div>
             </header>
@@ -767,30 +754,23 @@ export default function TimeTrackingPage({
                         <WorklogEntriesTable
                             key={selectedDate}
                             entries={filteredEntries}
-                            clients={clients}
-                            tasks={tasks}
+                            organizations={organizations}
                             selectedEntryId={selectedEntryId}
-                            editingEntryId={editingEntryId}
                             onSelectEntry={handleSelectEntry}
                             onRequestEditEntry={handleRowEditRequest}
-                            onEntryHoursChange={handleEntryHoursChange}
-                            onEntryMetaChange={handleEntryMetaChange}
                             onAddEntry={handleAddEntry}
                             onDeleteEntry={handleDeleteEntry}
-                            onSaveEntryEdit={saveEditingEntry}
-                            onCancelEntryEdit={cancelEntryEdit}
                         />
                     </PlaceholderPanel>
 
                     <PlaceholderPanel title="Comment" className="tracking-details-panel">
-                        <TaskDetailsPanel
-                            entry={selectedEntry}
-                            value={selectedEntry?.comment ?? ""}
-                            disabled={editingEntryId == null || selectedEntryId !== editingEntryId}
-                            onChange={handleEntryCommentChange}
-                            onCommit={() => {}}
-                            onEscape={cancelEntryEdit}
-                        />
+                        <div className="task-details-panel">
+                            <div className="task-details-comment">
+                                <p className="tracking-modal-text">
+                                    {selectedEntry?.comment || ""}
+                                </p>
+                            </div>
+                        </div>
                     </PlaceholderPanel>
 
                     <PlaceholderPanel title={`Monthly Summary — ${selectedMonthLabel}`} className="tracking-summary-panel">
@@ -802,6 +782,19 @@ export default function TimeTrackingPage({
                     </PlaceholderPanel>
                 </div>
             </div>
+
+            {entryEditorOpen && draftEntry && (
+                <WorklogEntryModal
+                    mode={entryEditorMode}
+                    draftEntry={draftEntry}
+                    organizations={organizations}
+                    clients={clients}
+                    tasks={tasks}
+                    onChange={handleDraftEntryChange}
+                    onSave={saveEditingEntry}
+                    onCancel={cancelEntryEdit}
+                />
+            )}
 
             {validationDialogOpen && (
                 <div className="tracking-modal-overlay" role="presentation">
@@ -819,59 +812,6 @@ export default function TimeTrackingPage({
                         <div className="tracking-modal-actions">
                             <button type="button" className="tracking-modal-button" onClick={() => setValidationDialogOpen(false)}>
                                 OK
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {dateSwitchConfirmOpen && (
-                <div className="tracking-modal-overlay" role="presentation">
-                    <div className="tracking-modal tracking-modal-confirm" role="dialog" aria-modal="true" aria-labelledby="tracking-confirm-title">
-                        <div className="tracking-modal-header">
-                            <h3 id="tracking-confirm-title">Unsaved changes</h3>
-                        </div>
-                        <div className="tracking-modal-body">
-                            <p className="tracking-modal-text">
-                                Есть несохраненные изменения за текущий день. Переключиться на другую дату без сохранения?
-                            </p>
-                        </div>
-                        <div className="tracking-modal-actions">
-                            <button type="button" className="tracking-modal-button" onClick={handleConfirmDateSwitch}>
-                                Переключиться
-                            </button>
-                            <button
-                                type="button"
-                                className="tracking-modal-button tracking-modal-button-secondary"
-                                onClick={handleCancelDateSwitch}
-                            >
-                                Остаться
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {switchDialogOpen && (
-                <div className="tracking-modal-overlay" role="presentation">
-                    <div className="tracking-modal tracking-modal-confirm" role="dialog" aria-modal="true" aria-labelledby="tracking-row-switch-title">
-                        <div className="tracking-modal-header">
-                            <h3 id="tracking-row-switch-title">Unsaved changes</h3>
-                        </div>
-                        <div className="tracking-modal-body">
-                            <p className="tracking-modal-text">
-                                There are unsaved changes for the current worklog row. What do you want to do?
-                            </p>
-                        </div>
-                        <div className="tracking-modal-actions">
-                            <button type="button" className="tracking-modal-button" onClick={handleSaveFromRowSwitchDialog}>
-                                Save changes
-                            </button>
-                            <button type="button" className="tracking-modal-button" onClick={handleDiscardFromRowSwitchDialog}>
-                                Discard changes
-                            </button>
-                            <button type="button" className="tracking-modal-button tracking-modal-button-secondary" onClick={handleStayEditing}>
-                                Stay
                             </button>
                         </div>
                     </div>

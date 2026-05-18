@@ -1227,6 +1227,37 @@ select {
   overflow: auto;
 }
 
+.tracking-modal-worklog-editor {
+  width: min(640px, calc(100vw - 32px));
+  min-width: min(560px, calc(100vw - 32px));
+  min-height: 420px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 32px);
+  resize: both;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.tracking-modal-worklog-editor .tracking-modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.tracking-modal-worklog-editor .tracking-modal-actions {
+  flex: 0 0 auto;
+  margin-top: auto;
+}
+
+.tracking-modal-worklog-task-field select {
+  min-height: 34px;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .tasks-editor-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

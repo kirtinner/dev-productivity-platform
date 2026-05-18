@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     createOrganization as apiCreateOrganization,
     deleteOrganization as apiDeleteOrganization,
@@ -6,9 +6,9 @@ import {
     updateOrganization as apiUpdateOrganization
 } from "../services/organizationsService";
 
-function createOrganization(nextId) {
+function createOrganizationDraft() {
     return {
-        id: nextId,
+        id: null,
         shortName: "",
         fullName: ""
     };
@@ -30,20 +30,15 @@ function validateOrganization(organization) {
 
 export default function OrganizationsPage() {
     const [organizations, setOrganizations] = useState([]);
-    const [savedOrganizations, setSavedOrganizations] = useState([]);
     const [selectedOrganizationId, setSelectedOrganizationId] = useState(null);
-    const [editingOrganizationId, setEditingOrganizationId] = useState(null);
+    const [editorOpen, setEditorOpen] = useState(false);
+    const [editorMode, setEditorMode] = useState(null);
     const [draftOrganization, setDraftOrganization] = useState(null);
-    const [editingOriginalOrganization, setEditingOriginalOrganization] = useState(null);
-    const [nextId, setNextId] = useState(1);
     const [validationDialogOpen, setValidationDialogOpen] = useState(false);
     const [validationIssues, setValidationIssues] = useState([]);
-    const [saveErrorDialogOpen, setSaveErrorDialogOpen] = useState(false);
-    const [saveErrorMessage, setSaveErrorMessage] = useState("");
-    const [deleteWarningDialogOpen, setDeleteWarningDialogOpen] = useState(false);
-    const [deleteWarningMessage, setDeleteWarningMessage] = useState("");
-    const [switchDialogOpen, setSwitchDialogOpen] = useState(false);
-    const [pendingSelectionId, setPendingSelectionId] = useState(null);
+    const [warningDialogOpen, setWarningDialogOpen] = useState(false);
+    const [warningTitle, setWarningTitle] = useState("Delete not available");
+    const [warningMessage, setWarningMessage] = useState("");
     const handleCancelRef = useRef(() => {});
 
     const organizationCountLabel = useMemo(
@@ -51,253 +46,153 @@ export default function OrganizationsPage() {
         [organizations.length]
     );
 
-    const selectedOrganization = organizations.find(organization => organization.id === selectedOrganizationId);
-    const isDirty = editingOrganizationId != null || JSON.stringify(organizations) !== JSON.stringify(savedOrganizations);
-    const isDraftDirty = editingOrganizationId != null && (
-        editingOriginalOrganization == null ||
-        draftOrganization == null ||
-        draftOrganization.shortName !== editingOriginalOrganization.shortName ||
-        draftOrganization.fullName !== editingOriginalOrganization.fullName
-    );
+    const selectedOrganization = organizations.find(organization => organization.id === selectedOrganizationId) ?? null;
 
-    const discardCurrentEdit = (nextSelectedId = null) => {
-        const currentEditingId = editingOrganizationId;
-        const savedOrganization = savedOrganizations.find(organization => organization.id === currentEditingId);
-
-        if (savedOrganization) {
-            setOrganizations(currentOrganizations =>
-                currentOrganizations.map(organization =>
-                    organization.id === savedOrganization.id
-                        ? { ...savedOrganization }
-                        : organization
-                )
-            );
-            setSelectedOrganizationId(nextSelectedId ?? savedOrganization.id);
-        } else {
-            setOrganizations(currentOrganizations => {
-                const nextOrganizations = currentOrganizations.filter(
-                    organization => organization.id !== currentEditingId
-                );
-                setSelectedOrganizationId(nextSelectedId ?? nextOrganizations[nextOrganizations.length - 1]?.id ?? null);
-                return nextOrganizations;
-            });
-        }
-
-        setEditingOrganizationId(null);
-        setDraftOrganization(null);
-        setEditingOriginalOrganization(null);
-        return Boolean(savedOrganization);
-    };
-
-    const closeModals = () => {
+    const closeTransientDialogs = useCallback(() => {
         setValidationDialogOpen(false);
         setValidationIssues([]);
-        setSaveErrorDialogOpen(false);
-        setSaveErrorMessage("");
-        setDeleteWarningDialogOpen(false);
-        setDeleteWarningMessage("");
-        setSwitchDialogOpen(false);
-        setPendingSelectionId(null);
-    };
+        setWarningDialogOpen(false);
+        setWarningTitle("Delete not available");
+        setWarningMessage("");
+    }, []);
 
-    const beginEdit = (organization) => {
+    const closeEditor = useCallback(() => {
+        setEditorOpen(false);
+        setEditorMode(null);
+        setDraftOrganization(null);
+        closeTransientDialogs();
+    }, [closeTransientDialogs]);
+
+    const openEditorForExisting = (organization) => {
         setSelectedOrganizationId(organization.id);
-        setEditingOrganizationId(organization.id);
+        setEditorOpen(true);
+        setEditorMode("edit");
         setDraftOrganization({ ...organization });
-        setEditingOriginalOrganization({ ...organization });
-        closeModals();
+        closeTransientDialogs();
     };
 
-    const commitDraft = async (nextSelectedId = selectedOrganizationId) => {
+    const openEditorForNew = () => {
+        setEditorOpen(true);
+        setEditorMode("add");
+        setDraftOrganization(createOrganizationDraft());
+        closeTransientDialogs();
+    };
+
+    const handleAddOrganization = () => {
+        if (editorOpen) {
+            return;
+        }
+
+        openEditorForNew();
+    };
+
+    const handleEditOrganization = () => {
+        if (selectedOrganization && !editorOpen) {
+            openEditorForExisting(selectedOrganization);
+        }
+    };
+
+    const handleRowSelect = (organization) => {
+        setSelectedOrganizationId(organization.id);
+    };
+
+    const handleRowEditRequest = (organization) => {
+        if (!editorOpen) {
+            openEditorForExisting(organization);
+        }
+    };
+
+    const handleDraftChange = (field, nextValue) => {
+        setDraftOrganization(current => (current ? {
+            ...current,
+            [field]: nextValue
+        } : current));
+    };
+
+    const handleDeleteOrganization = async () => {
+        if (!selectedOrganization || editorOpen) {
+            return;
+        }
+
+        const organizationId = selectedOrganization.id;
+        try {
+            await apiDeleteOrganization(organizationId);
+            const nextOrganizations = organizations.filter(organization => organization.id !== organizationId);
+
+            setOrganizations(nextOrganizations);
+            setSelectedOrganizationId(nextOrganizations[0]?.id ?? null);
+            closeTransientDialogs();
+        } catch (error) {
+            const message =
+                error?.response?.data?.message ??
+                error?.response?.data?.error ??
+                error?.message ??
+                "Organization is used in the system and cannot be deleted.";
+            setWarningTitle("Delete not available");
+            setWarningMessage(message);
+            setWarningDialogOpen(true);
+        }
+    };
+
+    const handleSaveOrganization = async () => {
         if (!draftOrganization) {
-            return false;
+            return;
         }
 
         const issues = validateOrganization(draftOrganization);
         if (issues.length > 0) {
             setValidationIssues(issues);
             setValidationDialogOpen(true);
-            return false;
+            return;
         }
 
         try {
-            const isNewOrganization = editingOriginalOrganization == null;
+            const isNewOrganization = editorMode === "add";
+            const payload = {
+                shortName: draftOrganization.shortName.trim(),
+                fullName: draftOrganization.fullName.trim()
+            };
             const savedOrganization = isNewOrganization
-                ? await apiCreateOrganization({
-                    shortName: draftOrganization.shortName,
-                    fullName: draftOrganization.fullName
-                })
-                : await apiUpdateOrganization(draftOrganization.id, {
-                    shortName: draftOrganization.shortName,
-                    fullName: draftOrganization.fullName
-                });
-
-            setOrganizations(currentOrganizations =>
-                currentOrganizations.map(organization =>
+                ? await apiCreateOrganization(payload)
+                : await apiUpdateOrganization(draftOrganization.id, payload);
+            const normalizedOrganization = {
+                ...draftOrganization,
+                ...savedOrganization,
+                ...payload
+            };
+            const nextOrganizations = isNewOrganization
+                ? [...organizations, normalizedOrganization]
+                : organizations.map(organization =>
                     organization.id === draftOrganization.id
-                        ? { ...savedOrganization }
+                        ? normalizedOrganization
                         : organization
-                )
-            );
-            setSavedOrganizations(currentOrganizations =>
-                currentOrganizations.some(organization => organization.id === draftOrganization.id)
-                    ? currentOrganizations.map(organization =>
-                        organization.id === draftOrganization.id
-                            ? { ...savedOrganization }
-                            : organization
-                    )
-                    : [...currentOrganizations, { ...savedOrganization }]
-            );
-            setSelectedOrganizationId(nextSelectedId ?? savedOrganization.id);
-            setEditingOrganizationId(null);
-            setDraftOrganization(null);
-            setEditingOriginalOrganization(null);
-            setNextId(currentId => Math.max(currentId, savedOrganization.id + 1));
-            closeModals();
-            return true;
+                );
+
+            setOrganizations(nextOrganizations);
+            setSelectedOrganizationId(normalizedOrganization.id);
+            closeEditor();
         } catch (error) {
-            const message = error?.response?.data?.message ?? error?.message ?? "Unable to save organization.";
-            setSaveErrorMessage(message);
-            setSaveErrorDialogOpen(true);
-            return false;
+            const message =
+                error?.response?.data?.message ??
+                error?.response?.data?.error ??
+                error?.message ??
+                "Unable to save organization.";
+            setWarningTitle("Save not available");
+            setWarningMessage(message);
+            setWarningDialogOpen(true);
         }
     };
 
-    const handleAddOrganization = () => {
-        const nextOrganization = createOrganization(nextId);
-
-        setOrganizations(currentOrganizations => [...currentOrganizations, nextOrganization]);
-        setSelectedOrganizationId(nextOrganization.id);
-        setEditingOrganizationId(nextOrganization.id);
-        setDraftOrganization({ ...nextOrganization });
-        setEditingOriginalOrganization(null);
-        setNextId(currentId => currentId + 1);
-        closeModals();
-    };
-
-    const handleEditOrSave = () => {
-        if (editingOrganizationId != null) {
-            void commitDraft();
+    const handleCancelOrganization = () => {
+        if (!editorOpen) {
             return;
         }
 
-        if (selectedOrganization) {
-            beginEdit(selectedOrganization);
-        }
-    };
-
-    const handleRowEditRequest = (organization) => {
-        if (editingOrganizationId != null && organization.id !== editingOrganizationId) {
-            if (isDraftDirty) {
-                setPendingSelectionId(organization.id);
-                setSwitchDialogOpen(true);
-                return;
-            }
-
-            discardCurrentEdit(organization.id);
-            beginEdit(organization);
-            return;
-        }
-
-        beginEdit(organization);
-    };
-
-    const handleCancel = () => {
-        if (editingOrganizationId == null) {
-            return;
-        }
-
-        discardCurrentEdit();
-        closeModals();
-    };
-
-    const handleRowSelect = (organization) => {
-        if (editingOrganizationId != null && organization.id !== editingOrganizationId) {
-            if (!isDraftDirty) {
-                discardCurrentEdit(organization.id);
-                closeModals();
-                return;
-            }
-
-            setPendingSelectionId(organization.id);
-            setSwitchDialogOpen(true);
-            return;
-        }
-
-        setSelectedOrganizationId(organization.id);
-    };
-
-    const handleDraftChange = (field, nextValue) => {
-        if (!draftOrganization) {
-            return;
-        }
-
-        setDraftOrganization({
-            ...draftOrganization,
-            [field]: nextValue
-        });
-        setSelectedOrganizationId(draftOrganization.id);
-        closeModals();
-    };
-
-    const handleDeleteOrganization = () => {
-        if (!selectedOrganization) {
-            return;
-        }
-
-        void (async () => {
-            try {
-                await apiDeleteOrganization(selectedOrganization.id);
-
-                setOrganizations(currentOrganizations =>
-                    currentOrganizations.filter(organization => organization.id !== selectedOrganization.id)
-                );
-                setSavedOrganizations(currentOrganizations =>
-                    currentOrganizations.filter(organization => organization.id !== selectedOrganization.id)
-                );
-
-                if (editingOrganizationId === selectedOrganization.id) {
-                    setEditingOrganizationId(null);
-                    setDraftOrganization(null);
-                }
-
-                const remaining = organizations.filter(organization => organization.id !== selectedOrganization.id);
-                setSelectedOrganizationId(remaining[0]?.id ?? null);
-                closeModals();
-            } catch (error) {
-                const message = error?.response?.data?.message ?? error?.message ?? "Unable to delete organization.";
-                setDeleteWarningMessage(message);
-                setDeleteWarningDialogOpen(true);
-            }
-        })();
-    };
-
-    const handleSaveFromSwitchDialog = async () => {
-        if (await commitDraft(pendingSelectionId)) {
-            setSwitchDialogOpen(false);
-            setPendingSelectionId(null);
-        }
-    };
-
-    const handleDiscardFromSwitchDialog = () => {
-        if (!editingOrganizationId) {
-            setSwitchDialogOpen(false);
-            setPendingSelectionId(null);
-            return;
-        }
-
-        discardCurrentEdit(pendingSelectionId);
-        setSwitchDialogOpen(false);
-        setPendingSelectionId(null);
-    };
-
-    const handleStayEditing = () => {
-        setSwitchDialogOpen(false);
-        setPendingSelectionId(null);
+        closeEditor();
     };
 
     useEffect(() => {
-        handleCancelRef.current = handleCancel;
+        handleCancelRef.current = handleCancelOrganization;
     });
 
     useEffect(() => {
@@ -312,9 +207,7 @@ export default function OrganizationsPage() {
                 }
 
                 setOrganizations(nextOrganizations);
-                setSavedOrganizations(nextOrganizations.map(item => ({ ...item })));
                 setSelectedOrganizationId(nextOrganizations[0]?.id ?? null);
-                setNextId(Math.max(...nextOrganizations.map(item => item.id), 0) + 1);
             } catch {
                 if (!active) {
                     return;
@@ -330,13 +223,7 @@ export default function OrganizationsPage() {
     }, []);
 
     useEffect(() => {
-        if (
-            editingOrganizationId == null ||
-            validationDialogOpen ||
-            saveErrorDialogOpen ||
-            deleteWarningDialogOpen ||
-            switchDialogOpen
-        ) {
+        if (!editorOpen || validationDialogOpen || warningDialogOpen) {
             return undefined;
         }
 
@@ -351,17 +238,10 @@ export default function OrganizationsPage() {
 
         window.addEventListener("keydown", handleKeyDown);
         return () => window.removeEventListener("keydown", handleKeyDown);
-    }, [
-        editingOrganizationId,
-        switchDialogOpen,
-        validationDialogOpen,
-        saveErrorDialogOpen,
-        deleteWarningDialogOpen
-    ]);
+    }, [editorOpen, validationDialogOpen, warningDialogOpen]);
 
     const renderRow = (organization) => {
         const isSelected = organization.id === selectedOrganizationId;
-        const isEditingRow = organization.id === editingOrganizationId;
 
         return (
             <tr
@@ -371,37 +251,17 @@ export default function OrganizationsPage() {
                 onDoubleClick={() => handleRowEditRequest(organization)}
             >
                 <td>
-                    {isEditingRow ? (
-                        <input
-                            className="app-master-data-input organizations-input"
-                            type="text"
-                            value={draftOrganization?.shortName ?? ""}
-                            onChange={event => handleDraftChange("shortName", event.target.value)}
-                            onClick={event => event.stopPropagation()}
-                        />
-                    ) : (
-                        <span className="organizations-readonly-cell">{organization.shortName}</span>
-                    )}
+                    <span className="organizations-readonly-cell">{organization.shortName}</span>
                 </td>
                 <td>
-                    {isEditingRow ? (
-                        <input
-                            className="app-master-data-input organizations-input"
-                            type="text"
-                            value={draftOrganization?.fullName ?? ""}
-                            onChange={event => handleDraftChange("fullName", event.target.value)}
-                            onClick={event => event.stopPropagation()}
-                        />
-                    ) : (
-                        <span className="organizations-readonly-cell">{organization.fullName}</span>
-                    )}
+                    <span className="organizations-readonly-cell">{organization.fullName}</span>
                 </td>
             </tr>
         );
     };
 
     return (
-        <div className="tracking-main organizations-main" data-dirty={isDirty ? "true" : "false"}>
+        <div className="tracking-main organizations-main">
             <header className="tracking-topbar">
                 <div className="tracking-topbar-main">
                     <div>
@@ -420,35 +280,32 @@ export default function OrganizationsPage() {
                         </div>
 
                         <div className="organizations-toolbar">
-                            {editingOrganizationId != null ? (
-                                <>
-                                    <button type="button" className="tracking-save-button" onClick={handleEditOrSave}>
-                                        Save
-                                    </button>
-                                    <button type="button" className="tracking-save-button" onClick={handleCancel}>
-                                        Cancel
-                                    </button>
-                                </>
-                            ) : (
-                                <>
-                                    <div className="organizations-toolbar-actions">
-                                        <button type="button" className="tracking-save-button" onClick={handleAddOrganization}>
-                                            Add
-                                        </button>
-                                        <button type="button" className="tracking-save-button" onClick={handleEditOrSave}>
-                                            Edit
-                                        </button>
-                                    </div>
-                                    <button
-                                        type="button"
-                                        className="organizations-delete-button organizations-delete-button-separated"
-                                        onClick={handleDeleteOrganization}
-                                        disabled={!selectedOrganization}
-                                    >
-                                        Delete
-                                    </button>
-                                </>
-                            )}
+                            <div className="organizations-toolbar-actions">
+                                <button
+                                    type="button"
+                                    className="tracking-save-button"
+                                    onClick={handleAddOrganization}
+                                    disabled={editorOpen}
+                                >
+                                    Add
+                                </button>
+                                <button
+                                    type="button"
+                                    className="tracking-save-button"
+                                    onClick={handleEditOrganization}
+                                    disabled={editorOpen || !selectedOrganization}
+                                >
+                                    Edit
+                                </button>
+                            </div>
+                            <button
+                                type="button"
+                                className="organizations-delete-button organizations-delete-button-separated"
+                                onClick={handleDeleteOrganization}
+                                disabled={editorOpen || !selectedOrganization}
+                            >
+                                Delete
+                            </button>
                         </div>
                     </div>
 
@@ -469,6 +326,56 @@ export default function OrganizationsPage() {
                     </div>
                 </section>
             </div>
+
+            {editorOpen && draftOrganization && (
+                <div className="tracking-modal-overlay" role="presentation">
+                    <div
+                        className="tracking-modal tracking-modal-confirm tracking-modal-organization-editor"
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="organizations-editor-title"
+                    >
+                        <div className="tracking-modal-header">
+                            <h3 id="organizations-editor-title">
+                                {editorMode === "add" ? "Add Organization" : "Edit Organization"}
+                            </h3>
+                        </div>
+                        <div className="tracking-modal-body">
+                            <div className="tracking-modal-fields">
+                                <label className="tracking-modal-field">
+                                    <span>Short Name</span>
+                                    <input
+                                        type="text"
+                                        value={draftOrganization.shortName ?? ""}
+                                        onChange={event => handleDraftChange("shortName", event.target.value)}
+                                    />
+                                </label>
+
+                                <label className="tracking-modal-field">
+                                    <span>Full Name</span>
+                                    <input
+                                        type="text"
+                                        value={draftOrganization.fullName ?? ""}
+                                        onChange={event => handleDraftChange("fullName", event.target.value)}
+                                    />
+                                </label>
+                            </div>
+                        </div>
+                        <div className="tracking-modal-actions">
+                            <button type="button" className="tracking-modal-button" onClick={handleSaveOrganization}>
+                                Save
+                            </button>
+                            <button
+                                type="button"
+                                className="tracking-modal-button tracking-modal-button-secondary"
+                                onClick={handleCancelOrganization}
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {validationDialogOpen && (
                 <div className="tracking-modal-overlay" role="presentation">
@@ -497,30 +404,7 @@ export default function OrganizationsPage() {
                 </div>
             )}
 
-            {saveErrorDialogOpen && (
-                <div className="tracking-modal-overlay" role="presentation">
-                    <div
-                        className="tracking-modal tracking-modal-confirm"
-                        role="dialog"
-                        aria-modal="true"
-                        aria-labelledby="organizations-save-error-title"
-                    >
-                        <div className="tracking-modal-header">
-                            <h3 id="organizations-save-error-title">Unable to save organization</h3>
-                        </div>
-                        <div className="tracking-modal-body">
-                            <p className="tracking-modal-text">{saveErrorMessage}</p>
-                        </div>
-                        <div className="tracking-modal-actions">
-                            <button type="button" className="tracking-modal-button" onClick={() => setSaveErrorDialogOpen(false)}>
-                                OK
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {deleteWarningDialogOpen && (
+            {warningDialogOpen && (
                 <div className="tracking-modal-overlay" role="presentation">
                     <div
                         className="tracking-modal tracking-modal-confirm"
@@ -529,45 +413,14 @@ export default function OrganizationsPage() {
                         aria-labelledby="organizations-warning-title"
                     >
                         <div className="tracking-modal-header">
-                            <h3 id="organizations-warning-title">Delete not available</h3>
+                            <h3 id="organizations-warning-title">{warningTitle}</h3>
                         </div>
                         <div className="tracking-modal-body">
-                            <p className="tracking-modal-text">{deleteWarningMessage}</p>
+                            <p className="tracking-modal-text">{warningMessage}</p>
                         </div>
                         <div className="tracking-modal-actions">
-                            <button type="button" className="tracking-modal-button" onClick={() => setDeleteWarningDialogOpen(false)}>
+                            <button type="button" className="tracking-modal-button" onClick={() => setWarningDialogOpen(false)}>
                                 OK
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {switchDialogOpen && (
-                <div className="tracking-modal-overlay" role="presentation">
-                    <div
-                        className="tracking-modal tracking-modal-confirm"
-                        role="dialog"
-                        aria-modal="true"
-                        aria-labelledby="organizations-switch-title"
-                    >
-                        <div className="tracking-modal-header">
-                            <h3 id="organizations-switch-title">Unsaved changes</h3>
-                        </div>
-                        <div className="tracking-modal-body">
-                            <p className="tracking-modal-text">
-                                There are unsaved changes for the current organization. What do you want to do?
-                            </p>
-                        </div>
-                        <div className="tracking-modal-actions">
-                            <button type="button" className="tracking-modal-button" onClick={handleSaveFromSwitchDialog}>
-                                Save changes
-                            </button>
-                            <button type="button" className="tracking-modal-button" onClick={handleDiscardFromSwitchDialog}>
-                                Discard changes
-                            </button>
-                            <button type="button" className="tracking-modal-button tracking-modal-button-secondary" onClick={handleStayEditing}>
-                                Stay
                             </button>
                         </div>
                     </div>

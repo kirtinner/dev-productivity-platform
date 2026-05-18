@@ -140,6 +140,7 @@ function App() {
             case "time-tracking":
                 return (
                     <TimeTrackingPage
+                        organizations={organizations}
                         userSettings={userSettings}
                     />
                 );
@@ -195,6 +196,7 @@ function App() {
             default:
                 return (
                     <TimeTrackingPage
+                        organizations={organizations}
                         userSettings={userSettings}
                     />
                 );

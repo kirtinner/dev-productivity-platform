@@ -405,7 +405,7 @@ export default function ProjectsPage({
                         disabled={filteredClients.length === 0}
                     >
                         {filteredClients.length === 0 ? (
-                            <option value="">No clients</option>
+                            <option value=""></option>
                         ) : (
                             filteredClients.map(client => (
                                 <option key={client.id} value={String(client.id)}>
@@ -492,7 +492,7 @@ export default function ProjectsPage({
                                         value={String(draftProject.organizationId ?? "")}
                                         onChange={event => handleDraftOrganizationChange(event.target.value)}
                                     >
-                                        <option value="">Select organization</option>
+                                        <option value=""></option>
                                         {organizations.map(organization => (
                                             <option key={organization.id} value={String(organization.id)}>
                                                 {organization.shortName}
@@ -509,7 +509,7 @@ export default function ProjectsPage({
                                         disabled={draftClients.length === 0}
                                     >
                                         <option value="">
-                                            {draftClients.length === 0 ? "No clients" : "Select client"}
+                                            {""}
                                         </option>
                                         {draftClients.map(client => (
                                             <option key={client.id} value={String(client.id)}>

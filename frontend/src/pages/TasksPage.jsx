@@ -19,6 +19,7 @@ function createTaskDraft(context) {
         created_at: todayIso(),
         task_number: "",
         name: "",
+        comment: "",
         description: "",
         implementation_details: "",
         estimated_hours: 0,
@@ -58,8 +59,9 @@ function validateTask(task, softwareProducts) {
         issues.push("software_product is required.");
     }
 
-    if (Number(task.estimated_hours) < 0) {
-        issues.push("estimated_hours must be greater than or equal to 0.");
+    const estimatedHours = Number(task.estimated_hours);
+    if (!Number.isFinite(estimatedHours) || estimatedHours < 0) {
+        issues.push("estimated_hours must be a number greater than or equal to 0.");
     }
 
     return issues;
@@ -90,6 +92,196 @@ function sameId(left, right) {
     return left != null && right != null && String(left) === String(right);
 }
 
+function TaskEditorModal({
+    editorMode,
+    draftTask,
+    organizations,
+    clients,
+    projects,
+    softwareProducts,
+    onDraftChange,
+    onOrganizationChange,
+    onClientChange,
+    onProjectChange,
+    onSoftwareProductChange,
+    onCompletedChange,
+    onEstimatedHoursChange,
+    onSave,
+    onCancel
+}) {
+    return (
+        <div className="tracking-modal-overlay" role="presentation">
+            <div
+                className="tracking-modal tracking-modal-confirm tracking-modal-task-editor"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="tasks-editor-title"
+            >
+                <div className="tracking-modal-header">
+                    <h3 id="tasks-editor-title">{editorMode === "add" ? "Add Task" : "Edit Task"}</h3>
+                </div>
+                <div className="tracking-modal-body">
+                    <div className="tasks-editor-grid">
+                        <label className="tracking-modal-field tasks-editor-field tasks-editor-field-checkbox">
+                            <span>Completed</span>
+                            <input
+                                type="checkbox"
+                                checked={Boolean(draftTask.completed)}
+                                onChange={event => onCompletedChange(event.target.checked)}
+                            />
+                        </label>
+
+                        <label className="tracking-modal-field tasks-editor-field">
+                            <span>Created Date</span>
+                            <input
+                                type="date"
+                                value={draftTask.created_at ?? ""}
+                                onChange={event => onDraftChange("created_at", event.target.value)}
+                            />
+                        </label>
+
+                        <label className="tracking-modal-field tasks-editor-field">
+                            <span>Task Number</span>
+                            <input
+                                type="text"
+                                value={draftTask.task_number ?? ""}
+                                onChange={event => onDraftChange("task_number", event.target.value)}
+                            />
+                        </label>
+
+                        <label className="tracking-modal-field tasks-editor-field">
+                            <span>Organization</span>
+                            <select
+                                value={String(draftTask.organizationId ?? "")}
+                                onChange={event => onOrganizationChange(event.target.value)}
+                            >
+                                <option value=""></option>
+                                {organizations.map(organization => (
+                                    <option key={organization.id} value={String(organization.id)}>
+                                        {organization.shortName}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+
+                        <label className="tracking-modal-field tasks-editor-field">
+                            <span>Client</span>
+                            <select
+                                value={String(draftTask.clientId ?? "")}
+                                onChange={event => onClientChange(event.target.value)}
+                                disabled={clients.length === 0}
+                            >
+                                <option value=""></option>
+                                {clients.map(client => (
+                                    <option key={client.id} value={String(client.id)}>
+                                        {client.shortName}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+
+                        <label className="tracking-modal-field tasks-editor-field">
+                            <span>Project</span>
+                            <select
+                                value={String(draftTask.projectId ?? "")}
+                                onChange={event => onProjectChange(event.target.value)}
+                                disabled={projects.length === 0}
+                            >
+                                <option value=""></option>
+                                {projects.map(project => (
+                                    <option key={project.id} value={String(project.id)}>
+                                        {project.shortName}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+
+                        <label className="tracking-modal-field tasks-editor-field">
+                            <span>Software Product</span>
+                            <select
+                                value={String(draftTask.softwareProductId ?? "")}
+                                onChange={event => onSoftwareProductChange(event.target.value)}
+                                disabled={softwareProducts.length === 0}
+                            >
+                                <option value=""></option>
+                                {softwareProducts.map(product => (
+                                    <option key={product.id} value={String(product.id)}>
+                                        {product.shortName} - {product.fullName}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+
+                        <label className="tracking-modal-field tasks-editor-field tasks-editor-field-full">
+                            <span>Name</span>
+                            <input
+                                type="text"
+                                value={draftTask.name ?? ""}
+                                onChange={event => onDraftChange("name", event.target.value)}
+                            />
+                        </label>
+
+                        <label className="tracking-modal-field tasks-editor-field">
+                            <span>Estimated Hours</span>
+                            <input
+                                type="number"
+                                min="0"
+                                step="0.25"
+                                value={draftTask.estimated_hours}
+                                onChange={event => onEstimatedHoursChange(event.target.value)}
+                            />
+                        </label>
+
+                        <label className="tracking-modal-field tasks-editor-field tasks-editor-field-full">
+                            <span>Comment</span>
+                            <textarea
+                                rows="3"
+                                value={draftTask.comment ?? ""}
+                                onChange={event => onDraftChange("comment", event.target.value)}
+                            />
+                        </label>
+
+                        <label className="tracking-modal-field tasks-editor-field tasks-editor-field-full">
+                            <span>Description</span>
+                            <textarea
+                                rows="3"
+                                value={draftTask.description ?? ""}
+                                onChange={event => onDraftChange("description", event.target.value)}
+                            />
+                        </label>
+
+                        <label className="tracking-modal-field tasks-editor-field tasks-editor-field-full">
+                            <span>Implementation Details</span>
+                            <textarea
+                                rows="4"
+                                value={draftTask.implementation_details ?? ""}
+                                onChange={event => onDraftChange("implementation_details", event.target.value)}
+                            />
+                        </label>
+                    </div>
+                    {softwareProducts.length === 0 ? (
+                        <div className="tracking-modal-error">
+                            No software products are available. Add software products in Settings.
+                        </div>
+                    ) : null}
+                </div>
+                <div className="tracking-modal-actions">
+                    <button type="button" className="tracking-modal-button" onClick={onSave}>
+                        Save
+                    </button>
+                    <button
+                        type="button"
+                        className="tracking-modal-button tracking-modal-button-secondary"
+                        onClick={onCancel}
+                    >
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 export default function TasksPage({
     organizations = [],
     currentOrganizationId = null,
@@ -105,14 +297,10 @@ export default function TasksPage({
     const [editorOpen, setEditorOpen] = useState(false);
     const [editorMode, setEditorMode] = useState(null); // "add" | "edit"
     const [draftTask, setDraftTask] = useState(null);
-    const [originalDraftTask, setOriginalDraftTask] = useState(null);
-    const [pendingSelectionId, setPendingSelectionId] = useState(null);
-    const [pendingFilterSelection, setPendingFilterSelection] = useState(null);
     const [validationDialogOpen, setValidationDialogOpen] = useState(false);
     const [validationIssues, setValidationIssues] = useState([]);
     const [warningDialogOpen, setWarningDialogOpen] = useState(false);
     const [warningMessage, setWarningMessage] = useState("");
-    const [switchDialogOpen, setSwitchDialogOpen] = useState(false);
     const handleCancelRef = useRef(() => {});
 
     const filteredTasks = useMemo(
@@ -125,19 +313,6 @@ export default function TasksPage({
     );
 
     const selectedTask = tasks.find(task => sameId(task.id, selectedTaskId)) ?? null;
-    const isDraftDirty = editorOpen && draftTask && originalDraftTask && (
-        draftTask.completed !== originalDraftTask.completed
-        || draftTask.created_at !== originalDraftTask.created_at
-        || draftTask.task_number !== originalDraftTask.task_number
-        || draftTask.name !== originalDraftTask.name
-        || draftTask.description !== originalDraftTask.description
-        || draftTask.implementation_details !== originalDraftTask.implementation_details
-        || Number(draftTask.estimated_hours) !== Number(originalDraftTask.estimated_hours)
-        || draftTask.softwareProductId !== originalDraftTask.softwareProductId
-        || draftTask.organizationId !== originalDraftTask.organizationId
-        || draftTask.clientId !== originalDraftTask.clientId
-        || draftTask.projectId !== originalDraftTask.projectId
-    );
     const taskCountLabel = `${filteredTasks.length} task${filteredTasks.length === 1 ? "" : "s"}`;
 
     useEffect(() => {
@@ -196,16 +371,12 @@ export default function TasksPage({
         setValidationIssues([]);
         setWarningDialogOpen(false);
         setWarningMessage("");
-        setSwitchDialogOpen(false);
-        setPendingSelectionId(null);
-        setPendingFilterSelection(null);
     }, []);
 
     const closeEditor = useCallback(() => {
         setEditorOpen(false);
         setEditorMode(null);
         setDraftTask(null);
-        setOriginalDraftTask(null);
         closeTransientDialogs();
     }, [closeTransientDialogs]);
 
@@ -237,10 +408,6 @@ export default function TasksPage({
             ...task,
             softwareProductId: task.softwareProductId ?? null
         });
-        setOriginalDraftTask({
-            ...task,
-            softwareProductId: task.softwareProductId ?? null
-        });
         setSelectedTaskId(task.id);
         closeTransientDialogs();
     };
@@ -252,7 +419,6 @@ export default function TasksPage({
         setEditorOpen(true);
         setEditorMode("add");
         setDraftTask(nextDraft);
-        setOriginalDraftTask({ ...nextDraft });
         closeTransientDialogs();
     };
 
@@ -272,14 +438,6 @@ export default function TasksPage({
 
     const handleRowSelect = (task) => {
         if (editorOpen) {
-            if (!isDraftDirty) {
-                setSelectedTaskId(task.id);
-                openEditorForExisting(task);
-                return;
-            }
-
-            setPendingSelectionId(task.id);
-            setSwitchDialogOpen(true);
             return;
         }
 
@@ -288,13 +446,6 @@ export default function TasksPage({
 
     const handleRowEditRequest = (task) => {
         if (editorOpen) {
-            if (!isDraftDirty) {
-                openEditorForExisting(task);
-                return;
-            }
-
-            setPendingSelectionId(task.id);
-            setSwitchDialogOpen(true);
             return;
         }
 
@@ -357,12 +508,15 @@ export default function TasksPage({
             return;
         }
 
-        const nextDefaults = getContextDefaults(parsedOrganizationId);
+        const nextClients = clients.filter(client => sameId(client.organizationId, parsedOrganizationId));
+        const nextClientId = nextClients.some(client => sameId(client.id, draftTask.clientId))
+            ? draftTask.clientId
+            : null;
         setDraftTask(current => (current ? {
             ...current,
-            organizationId: nextDefaults.organizationId,
-            clientId: nextDefaults.clientId,
-            projectId: nextDefaults.projectId
+            organizationId: parsedOrganizationId,
+            clientId: nextClientId,
+            projectId: null
         } : current));
     };
 
@@ -382,11 +536,14 @@ export default function TasksPage({
             sameId(project.organizationId, draftTask.organizationId)
             && sameId(project.clientId, parsedClientId)
         );
+        const nextProjectId = nextProjects.some(project => sameId(project.id, draftTask.projectId))
+            ? draftTask.projectId
+            : null;
 
         setDraftTask(current => (current ? {
             ...current,
             clientId: parsedClientId,
-            projectId: nextProjects[0]?.id ?? null
+            projectId: nextProjectId
         } : current));
     };
 
@@ -423,12 +580,6 @@ export default function TasksPage({
     const handleOrganizationChange = (nextOrganizationId) => {
         const parsedOrganizationId = Number(nextOrganizationId);
 
-        if (editorOpen && isDraftDirty) {
-            setPendingFilterSelection({ organizationId: parsedOrganizationId, clientId: null, projectId: null });
-            setSwitchDialogOpen(true);
-            return;
-        }
-
         if (editorOpen) {
             closeEditor();
         }
@@ -439,16 +590,6 @@ export default function TasksPage({
 
     const handleClientChange = (nextClientId) => {
         const parsedClientId = nextClientId === "" ? null : Number(nextClientId);
-
-        if (editorOpen && isDraftDirty) {
-            setPendingFilterSelection({
-                organizationId: selectedOrganizationId,
-                clientId: parsedClientId,
-                projectId: null
-            });
-            setSwitchDialogOpen(true);
-            return;
-        }
 
         if (editorOpen) {
             closeEditor();
@@ -479,16 +620,6 @@ export default function TasksPage({
 
     const handleProjectChange = (nextProjectId) => {
         const parsedProjectId = nextProjectId === "" ? null : Number(nextProjectId);
-
-        if (editorOpen && isDraftDirty) {
-            setPendingFilterSelection({
-                organizationId: selectedOrganizationId,
-                clientId: selectedClientId,
-                projectId: parsedProjectId
-            });
-            setSwitchDialogOpen(true);
-            return;
-        }
 
         if (editorOpen) {
             closeEditor();
@@ -556,86 +687,6 @@ export default function TasksPage({
         closeEditor();
     };
 
-    const handleSaveFromSwitchDialog = async () => {
-        if (!draftTask) {
-            return;
-        }
-
-        const issues = validateTask(draftTask, softwareProducts);
-        if (issues.length > 0) {
-            setValidationIssues(issues);
-            setValidationDialogOpen(true);
-            return;
-        }
-
-        try {
-            const isNewTask = editorMode === "add";
-            const savedTask = isNewTask
-                ? await apiCreateTask(draftTask)
-                : await apiUpdateTask(draftTask.id, draftTask);
-            const normalizedTask = {
-                ...draftTask,
-                ...savedTask,
-                softwareProductId: draftTask.softwareProductId ?? savedTask.softwareProductId ?? null
-            };
-
-            setTasks(currentTasks =>
-                isNewTask
-                    ? [...currentTasks, normalizedTask]
-                    : currentTasks.map(task =>
-                        sameId(task.id, draftTask.id)
-                            ? normalizedTask
-                            : task
-                    )
-            );
-            setSelectedTaskId(pendingSelectionId ?? normalizedTask.id);
-
-            if (pendingFilterSelection != null) {
-                applyFilterSelection(
-                    pendingFilterSelection.organizationId,
-                    pendingFilterSelection.clientId,
-                    pendingFilterSelection.projectId
-                );
-            }
-
-            setEditorOpen(false);
-            setEditorMode(null);
-            setDraftTask(null);
-            setOriginalDraftTask(null);
-            setSwitchDialogOpen(false);
-            setPendingSelectionId(null);
-            setPendingFilterSelection(null);
-        } catch (error) {
-            const message =
-                error?.response?.data?.message ??
-                error?.response?.data?.error ??
-                error?.message ??
-                "Unable to save task.";
-            setWarningMessage(message);
-            setWarningDialogOpen(true);
-        }
-    };
-
-    const handleDiscardFromSwitchDialog = () => {
-        if (pendingFilterSelection != null) {
-            applyFilterSelection(
-                pendingFilterSelection.organizationId,
-                pendingFilterSelection.clientId,
-                pendingFilterSelection.projectId
-            );
-        } else if (pendingSelectionId != null) {
-            setSelectedTaskId(pendingSelectionId);
-        }
-
-        closeEditor();
-    };
-
-    const handleStayEditing = () => {
-        setSwitchDialogOpen(false);
-        setPendingSelectionId(null);
-        setPendingFilterSelection(null);
-    };
-
     useEffect(() => {
         handleCancelRef.current = () => {
             if (!editorOpen) {
@@ -647,7 +698,7 @@ export default function TasksPage({
     }, [editorOpen, closeEditor]);
 
     useEffect(() => {
-        if (!editorOpen || validationDialogOpen || warningDialogOpen || switchDialogOpen) {
+        if (!editorOpen || validationDialogOpen || warningDialogOpen) {
             return undefined;
         }
 
@@ -662,7 +713,7 @@ export default function TasksPage({
 
         window.addEventListener("keydown", handleKeyDown);
         return () => window.removeEventListener("keydown", handleKeyDown);
-    }, [editorOpen, switchDialogOpen, validationDialogOpen, warningDialogOpen]);
+    }, [editorOpen, validationDialogOpen, warningDialogOpen]);
 
     const renderRow = (task) => {
         const isSelected = sameId(task.id, selectedTaskId);
@@ -674,9 +725,7 @@ export default function TasksPage({
                 onClick={() => handleRowSelect(task)}
                 onDoubleClick={() => handleRowEditRequest(task)}
             >
-                <td>
-                    <input type="checkbox" checked={task.completed} disabled onClick={event => event.stopPropagation()} readOnly />
-                </td>
+                <td>{task.completed ? "Yes" : "No"}</td>
                 <td>{formatDate(task.created_at)}</td>
                 <td>{task.task_number}</td>
                 <td>{resolveClientLabel(clients, task.clientId)}</td>
@@ -709,7 +758,7 @@ export default function TasksPage({
         : [];
 
     return (
-        <div className="tracking-main organizations-main" data-dirty={editorOpen && isDraftDirty ? "true" : "false"}>
+        <div className="tracking-main organizations-main">
             <header className="tracking-topbar">
                 <div className="tracking-topbar-main">
                     <div>
@@ -747,10 +796,10 @@ export default function TasksPage({
                         className="clients-filter-select tasks-filter-select"
                         value={String(selectedClientId ?? "")}
                         onChange={event => handleClientChange(event.target.value)}
-                        disabled={editorOpen && isDraftDirty ? false : filterClients.length === 0}
+                        disabled={filterClients.length === 0}
                     >
                         {filterClients.length === 0 ? (
-                            <option value="">No clients</option>
+                            <option value=""></option>
                         ) : (
                             filterClients.map(client => (
                                 <option key={client.id} value={String(client.id)}>
@@ -773,7 +822,7 @@ export default function TasksPage({
                         disabled={filterProjects.length === 0}
                     >
                         {filterProjects.length === 0 ? (
-                            <option value="">No projects</option>
+                            <option value=""></option>
                         ) : (
                             filterProjects.map(project => (
                                 <option key={project.id} value={String(project.id)}>
@@ -852,168 +901,23 @@ export default function TasksPage({
             </div>
 
             {editorOpen && draftTask && (
-                <div className="tracking-modal-overlay" role="presentation">
-                    <div
-                        className="tracking-modal tracking-modal-confirm tracking-modal-task-editor"
-                        role="dialog"
-                        aria-modal="true"
-                        aria-labelledby="tasks-editor-title"
-                    >
-                        <div className="tracking-modal-header">
-                            <h3 id="tasks-editor-title">{editorMode === "add" ? "Add Task" : "Edit Task"}</h3>
-                        </div>
-                        <div className="tracking-modal-body">
-                            <div className="tasks-editor-grid">
-                                <label className="tracking-modal-field tasks-editor-field tasks-editor-field-checkbox">
-                                    <span>Completed</span>
-                                    <input
-                                        type="checkbox"
-                                        checked={Boolean(draftTask.completed)}
-                                        onChange={event => handleCompletedChange(event.target.checked)}
-                                    />
-                                </label>
-
-                                <label className="tracking-modal-field tasks-editor-field">
-                                    <span>Created Date</span>
-                                    <input
-                                        type="date"
-                                        value={draftTask.created_at ?? ""}
-                                        onChange={event => handleDraftChange("created_at", event.target.value)}
-                                    />
-                                </label>
-
-                                <label className="tracking-modal-field tasks-editor-field">
-                                    <span>Task Number</span>
-                                    <input
-                                        type="text"
-                                        value={draftTask.task_number ?? ""}
-                                        onChange={event => handleDraftChange("task_number", event.target.value)}
-                                    />
-                                </label>
-
-                                <label className="tracking-modal-field tasks-editor-field">
-                                    <span>Organization</span>
-                                    <select
-                                        value={String(draftTask.organizationId ?? "")}
-                                        onChange={event => handleDraftOrganizationChange(event.target.value)}
-                                    >
-                                        <option value="">Select organization</option>
-                                        {organizations.map(organization => (
-                                            <option key={organization.id} value={String(organization.id)}>
-                                                {organization.shortName}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </label>
-
-                                <label className="tracking-modal-field tasks-editor-field">
-                                    <span>Client</span>
-                                    <select
-                                        value={String(draftTask.clientId ?? "")}
-                                        onChange={event => handleDraftClientChange(event.target.value)}
-                                        disabled={editorClients.length === 0}
-                                    >
-                                        <option value="">Select client</option>
-                                        {editorClients.map(client => (
-                                            <option key={client.id} value={String(client.id)}>
-                                                {client.shortName}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </label>
-
-                                <label className="tracking-modal-field tasks-editor-field">
-                                    <span>Project</span>
-                                    <select
-                                        value={String(draftTask.projectId ?? "")}
-                                        onChange={event => handleDraftProjectChange(event.target.value)}
-                                        disabled={editorProjects.length === 0}
-                                    >
-                                        <option value="">Select project</option>
-                                        {editorProjects.map(project => (
-                                            <option key={project.id} value={String(project.id)}>
-                                                {project.shortName}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </label>
-
-                                <label className="tracking-modal-field tasks-editor-field">
-                                    <span>Software Product</span>
-                                    <select
-                                        value={String(draftTask.softwareProductId ?? "")}
-                                        onChange={event => handleDraftSoftwareProductChange(event.target.value)}
-                                        disabled={softwareProducts.length === 0}
-                                    >
-                                        <option value="">
-                                            {softwareProducts.length === 0 ? "No software products" : "Select software product"}
-                                        </option>
-                                        {softwareProducts.map(product => (
-                                            <option key={product.id} value={String(product.id)}>
-                                                {product.shortName} - {product.fullName}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </label>
-
-                                <label className="tracking-modal-field tasks-editor-field tasks-editor-field-full">
-                                    <span>Name</span>
-                                    <input
-                                        type="text"
-                                        value={draftTask.name ?? ""}
-                                        onChange={event => handleDraftChange("name", event.target.value)}
-                                    />
-                                </label>
-
-                                <label className="tracking-modal-field tasks-editor-field tasks-editor-field-full">
-                                    <span>Description</span>
-                                    <textarea
-                                        rows="3"
-                                        value={draftTask.description ?? ""}
-                                        onChange={event => handleDraftChange("description", event.target.value)}
-                                    />
-                                </label>
-
-                                <label className="tracking-modal-field tasks-editor-field tasks-editor-field-full">
-                                    <span>Implementation Details</span>
-                                    <textarea
-                                        rows="4"
-                                        value={draftTask.implementation_details ?? ""}
-                                        onChange={event => handleDraftChange("implementation_details", event.target.value)}
-                                    />
-                                </label>
-
-                                <label className="tracking-modal-field tasks-editor-field">
-                                    <span>Estimated Hours</span>
-                                    <input
-                                        type="number"
-                                        min="0"
-                                        step="0.25"
-                                        value={draftTask.estimated_hours}
-                                        onChange={event => handleEstimatedHoursChange(event.target.value)}
-                                    />
-                                </label>
-                            </div>
-                            {softwareProducts.length === 0 ? (
-                                <div className="tracking-modal-error">
-                                    No software products are available. Add software products in Settings.
-                                </div>
-                            ) : null}
-                        </div>
-                        <div className="tracking-modal-actions">
-                            <button type="button" className="tracking-modal-button" onClick={handleSaveTask}>
-                                Save
-                            </button>
-                            <button
-                                type="button"
-                                className="tracking-modal-button tracking-modal-button-secondary"
-                                onClick={handleCancelTask}
-                            >
-                                Cancel
-                            </button>
-                        </div>
-                    </div>
-                </div>
+                <TaskEditorModal
+                    editorMode={editorMode}
+                    draftTask={draftTask}
+                    organizations={organizations}
+                    clients={editorClients}
+                    projects={editorProjects}
+                    softwareProducts={softwareProducts}
+                    onDraftChange={handleDraftChange}
+                    onOrganizationChange={handleDraftOrganizationChange}
+                    onClientChange={handleDraftClientChange}
+                    onProjectChange={handleDraftProjectChange}
+                    onSoftwareProductChange={handleDraftSoftwareProductChange}
+                    onCompletedChange={handleCompletedChange}
+                    onEstimatedHoursChange={handleEstimatedHoursChange}
+                    onSave={handleSaveTask}
+                    onCancel={handleCancelTask}
+                />
             )}
 
             {validationDialogOpen && (
@@ -1066,36 +970,6 @@ export default function TasksPage({
                 </div>
             )}
 
-            {switchDialogOpen && (
-                <div className="tracking-modal-overlay" role="presentation">
-                    <div
-                        className="tracking-modal tracking-modal-confirm"
-                        role="dialog"
-                        aria-modal="true"
-                        aria-labelledby="tasks-switch-title"
-                    >
-                        <div className="tracking-modal-header">
-                            <h3 id="tasks-switch-title">Unsaved changes</h3>
-                        </div>
-                        <div className="tracking-modal-body">
-                            <p className="tracking-modal-text">
-                                There are unsaved changes for the current task. What do you want to do?
-                            </p>
-                        </div>
-                        <div className="tracking-modal-actions">
-                            <button type="button" className="tracking-modal-button" onClick={handleSaveFromSwitchDialog}>
-                                Save changes
-                            </button>
-                            <button type="button" className="tracking-modal-button" onClick={handleDiscardFromSwitchDialog}>
-                                Discard changes
-                            </button>
-                            <button type="button" className="tracking-modal-button tracking-modal-button-secondary" onClick={handleStayEditing}>
-                                Stay
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
         </div>
     );
 }

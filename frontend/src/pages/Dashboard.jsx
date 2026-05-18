@@ -116,7 +116,7 @@ export default function Dashboard({onLogout, onNavigate}) {
                     value={taskId || ""}
                     onChange={e => setTaskId(e.target.value)}
                 >
-                    <option value="">Select task</option>
+                    <option value=""></option>
 
                     {tasks.map(task => (
                         <option key={task.id} value={String(task.id)}>

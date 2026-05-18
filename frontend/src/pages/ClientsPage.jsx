@@ -407,7 +407,7 @@ export default function ClientsPage({
                                         value={String(draftClient.organizationId ?? "")}
                                         onChange={event => handleDraftOrganizationChange(event.target.value)}
                                     >
-                                        <option value="">Select organization</option>
+                                        <option value=""></option>
                                         {organizations.map(organization => (
                                             <option key={organization.id} value={String(organization.id)}>
                                                 {organization.shortName}

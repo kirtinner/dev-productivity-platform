@@ -161,7 +161,7 @@ export default function SettingsPage({
                                     onChange={event => setSettingsDraftOrganizationId(event.target.value)}
                                     disabled={userSettingsLoading || settingsSaving}
                                 >
-                                    <option value="">Select organization</option>
+                                    <option value=""></option>
                                     {organizations.map(organization => (
                                         <option key={organization.id} value={String(organization.id)}>
                                             {organization.shortName}

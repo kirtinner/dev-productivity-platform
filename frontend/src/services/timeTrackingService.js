@@ -1,13 +1,11 @@
 import api from "../api/api";
 
-function isLocalTimeEntryId(id) {
-    return typeof id === "string" && id.startsWith("local-");
-}
-
 function mapTimeEntry(entry) {
     return {
         id: entry.id,
         date: entry.date,
+        organizationId: entry.organizationId ?? entry.organization?.id ?? null,
+        organizationName: entry.organizationName ?? entry.organization?.shortName ?? entry.organization?.fullName ?? "",
         clientId: entry.clientId,
         clientName: entry.clientName ?? entry.client?.shortName ?? entry.client?.fullName ?? "",
         taskId: entry.taskId,
@@ -44,6 +42,7 @@ function uniqueClientsFromTasks(tasks) {
 
         clientsById.set(clientId, {
             id: clientId,
+            organizationId: task.organizationId ?? task.organization?.id ?? null,
             name: task.clientName ?? task.client?.shortName ?? task.client?.fullName ?? ""
         });
     });
@@ -79,33 +78,33 @@ export async function getTimeEntriesByMonth(year, month) {
     return response.data.map(mapTimeEntry);
 }
 
-export async function saveTimeEntriesForDate(date, entries) {
-    const payload = entries.map(entry => {
-        const base = {
-            clientId: entry.clientId,
-            taskId: entry.taskId,
-            hours: entry.hours,
-            comment: entry.comment ?? ""
-        };
+function toTimeEntryRequest(entry) {
+    return {
+        date: entry.date,
+        organizationId: entry.organizationId,
+        clientId: entry.clientId,
+        taskId: entry.taskId,
+        hours: entry.hours,
+        comment: entry.comment ?? ""
+    };
+}
 
-        if (isLocalTimeEntryId(entry.id)) {
-            return {
-                ...base,
-                id: null
-            };
-        }
+export async function createTimeEntry(entry) {
+    const payload = toTimeEntryRequest(entry);
+    console.log("[timeTrackingService] POST /time-entries payload", payload);
+    const response = await api.post("/time-entries", payload);
+    return mapTimeEntry(response.data);
+}
 
-        return {
-            ...base,
-            id: entry.id
-        };
-    });
+export async function updateTimeEntry(id, entry) {
+    const payload = toTimeEntryRequest(entry);
+    console.log(`[timeTrackingService] PUT /time-entries/${id} payload`, payload);
+    const response = await api.put(`/time-entries/${id}`, payload);
+    return mapTimeEntry(response.data);
+}
 
-    const response = await api.put("/time-entries/day", payload, {
-        params: { date }
-    });
-
-    return response.data.map(mapTimeEntry);
+export async function deleteTimeEntry(id) {
+    await api.delete(`/time-entries/${id}`);
 }
 
 export async function getClients() {

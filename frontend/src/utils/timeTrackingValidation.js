@@ -13,6 +13,10 @@ export function validateWorklogDay(entries, dailyHoursLimit) {
         const rowLabel = `Row ${index + 1}`;
         const rowIssues = [];
 
+        if (entry.organizationId == null) {
+            rowIssues.push("Organization is required.");
+        }
+
         if (entry.clientId == null) {
             rowIssues.push("Client is required.");
         }
