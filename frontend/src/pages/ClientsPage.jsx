@@ -48,6 +48,27 @@ function resolveOrganizationLabel(organizations, organizationId) {
     return organizations.find(organization => organization.id === organizationId)?.shortName ?? "";
 }
 
+function sortClientsForList(sourceClients) {
+    return sourceClients
+        .slice()
+        .sort((left, right) => {
+            const leftHidden = Boolean(left.notDisplayed);
+            const rightHidden = Boolean(right.notDisplayed);
+
+            if (leftHidden !== rightHidden) {
+                return leftHidden ? 1 : -1;
+            }
+
+            return Number(left.id ?? 0) - Number(right.id ?? 0);
+        });
+}
+
+function getClientsForOrganization(sourceClients, organizationId) {
+    return organizationId == null
+        ? sourceClients
+        : sourceClients.filter(client => client.organizationId === organizationId);
+}
+
 export default function ClientsPage({
     organizations = [],
     currentOrganizationId = null
@@ -72,9 +93,7 @@ export default function ClientsPage({
     const handleCancelRef = useRef(() => {});
 
     const filteredClients = useMemo(
-        () => selectedOrganizationId == null
-            ? clients
-            : clients.filter(client => client.organizationId === selectedOrganizationId),
+        () => sortClientsForList(getClientsForOrganization(clients, selectedOrganizationId)),
         [clients, selectedOrganizationId]
     );
 
@@ -99,7 +118,7 @@ export default function ClientsPage({
                     ?? organizations[0]?.id
                     ?? nextClients[0]?.organizationId
                     ?? null;
-                const initialClientId = nextClients.find(client => client.organizationId === initialOrganizationId)?.id ?? null;
+                const initialClientId = sortClientsForList(getClientsForOrganization(nextClients, initialOrganizationId))[0]?.id ?? null;
 
                 setClients(nextClients);
                 setSelectedOrganizationId(initialOrganizationId);
@@ -152,7 +171,7 @@ export default function ClientsPage({
     };
 
     const selectFirstVisibleClient = (nextClients, organizationId) => {
-        setSelectedClientId(nextClients.find(client => client.organizationId === organizationId)?.id ?? null);
+        setSelectedClientId(sortClientsForList(getClientsForOrganization(nextClients, organizationId))[0]?.id ?? null);
     };
 
     const handleAddClient = () => {
@@ -200,9 +219,7 @@ export default function ClientsPage({
         } else {
             sessionStorage.setItem("dev-productivity:clients:selected-organization-id", String(parsedOrganizationId));
         }
-        setSelectedClientId(clients.find(client =>
-            parsedOrganizationId == null || client.organizationId === parsedOrganizationId
-        )?.id ?? null);
+        setSelectedClientId(sortClientsForList(getClientsForOrganization(clients, parsedOrganizationId))[0]?.id ?? null);
         closeTransientDialogs();
     };
 
@@ -448,7 +465,7 @@ export default function ClientsPage({
                         </div>
                     </div>
 
-                    <div className="tracking-panel-body organizations-panel-body clients-table-scroll">
+                    <div className="tracking-panel-body organizations-panel-body directory-table-scroll clients-table-scroll">
                         <table className="app-master-data-table organizations-table tasks-table">
                             <colgroup>
                                 <col className="clients-col-hide" />

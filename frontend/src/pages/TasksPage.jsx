@@ -479,6 +479,7 @@ export default function TasksPage({
     const [visibleClients, setVisibleClients] = useState([]);
     const [projects, setProjects] = useState([]);
     const [tasks, setTasks] = useState([]);
+    const [lookupsLoaded, setLookupsLoaded] = useState(false);
     const [selectedOrganizationId, setSelectedOrganizationId] = useState(
         readStoredNumber("dev-productivity:tasks:selected-organization-id")
         ?? currentOrganizationId
@@ -523,6 +524,10 @@ export default function TasksPage({
 
         async function loadData() {
             try {
+                setLookupsLoaded(false);
+                const storedOrganizationId = readStoredNumber("dev-productivity:tasks:selected-organization-id");
+                const storedClientId = readStoredNumber("dev-productivity:tasks:selected-client-id");
+                const storedProjectId = readStoredNumber("dev-productivity:tasks:selected-project-id");
                 const [nextClients, nextVisibleClients, nextProjects, nextTasks] = await Promise.all([
                     loadClients(),
                     loadVisibleClients(),
@@ -539,9 +544,6 @@ export default function TasksPage({
                 setProjects(nextProjects);
                 setTasks(nextTasks);
 
-                const storedOrganizationId = readStoredNumber("dev-productivity:tasks:selected-organization-id");
-                const storedClientId = readStoredNumber("dev-productivity:tasks:selected-client-id");
-                const storedProjectId = readStoredNumber("dev-productivity:tasks:selected-project-id");
                 const initialOrganizationId =
                     storedOrganizationId != null && organizations.some(organization => organization.id === storedOrganizationId)
                         ? storedOrganizationId
@@ -574,6 +576,7 @@ export default function TasksPage({
                 setSelectedClientId(initialClientId);
                 setSelectedProjectId(initialProjectId);
                 setSelectedTaskId(initialTaskId);
+                setLookupsLoaded(true);
             } catch {
                 if (!active) {
                     return;
@@ -1172,6 +1175,10 @@ export default function TasksPage({
         : [];
 
     useEffect(() => {
+        if (!lookupsLoaded) {
+            return;
+        }
+
         if (filterClients.length === 0) {
             if (selectedClientId != null) {
                 setSelectedClientId(null);
@@ -1180,11 +1187,24 @@ export default function TasksPage({
             return;
         }
 
-        if (selectedClientId == null || !filterClients.some(client => sameId(client.id, selectedClientId))) {
-            setSelectedClientId(null);
-            sessionStorage.removeItem("dev-productivity:tasks:selected-client-id");
+        if (selectedClientId != null && !filterClients.some(client => sameId(client.id, selectedClientId))) {
+            const nextClientId = filterClients[0]?.id ?? null;
+            const nextProjectId = resolveProjectSelection(selectedOrganizationId, nextClientId, selectedProjectId);
+
+            setSelectedClientId(nextClientId);
+            setSelectedProjectId(nextProjectId);
+            if (nextClientId == null) {
+                sessionStorage.removeItem("dev-productivity:tasks:selected-client-id");
+            } else {
+                sessionStorage.setItem("dev-productivity:tasks:selected-client-id", String(nextClientId));
+            }
+            if (nextProjectId == null) {
+                sessionStorage.removeItem("dev-productivity:tasks:selected-project-id");
+            } else {
+                sessionStorage.setItem("dev-productivity:tasks:selected-project-id", String(nextProjectId));
+            }
         }
-    }, [filterClients, selectedClientId]);
+    }, [filterClients, lookupsLoaded, selectedClientId, selectedOrganizationId, selectedProjectId]);
 
     useEffect(() => {
         const resolvedProjectId = resolveProjectSelection(
@@ -1367,7 +1387,7 @@ export default function TasksPage({
                         </div>
                     </div>
 
-                    <div className="tracking-panel-body organizations-panel-body">
+                    <div className="tracking-panel-body organizations-panel-body directory-table-scroll">
                         <table className="app-master-data-table tasks-table">
                             <colgroup>
                                 <col className="tasks-col-completed" />

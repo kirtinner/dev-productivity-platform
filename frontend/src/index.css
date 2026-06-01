@@ -2063,16 +2063,28 @@ textarea:focus {
   align-self: flex-start;
 }
 
+.directory-table-scroll,
 .clients-table-scroll {
   max-height: min(70vh, 760px);
+  padding: 0;
+  background: #ffffff;
   overflow-y: auto;
   overflow-x: auto;
 }
 
+.directory-table-scroll .app-master-data-table,
+.clients-table-scroll .app-master-data-table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.directory-table-scroll .app-master-data-table thead th,
 .clients-table-scroll .app-master-data-table thead th {
   position: sticky;
   top: 0;
-  z-index: 2;
+  z-index: 5;
+  background: #eef2f6;
+  box-shadow: 0 1px 0 #dfe4ec;
 }
 
 .tasks-col-name {

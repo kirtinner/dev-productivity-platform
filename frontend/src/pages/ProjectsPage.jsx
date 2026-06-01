@@ -123,6 +123,7 @@ export default function ProjectsPage({
     const [clients, setClients] = useState([]);
     const [visibleClients, setVisibleClients] = useState([]);
     const [projects, setProjects] = useState([]);
+    const [lookupsLoaded, setLookupsLoaded] = useState(false);
     const [showOnlyOpenProjects, setShowOnlyOpenProjects] = useState(
         readStoredBoolean("dev-productivity:projects:show-only-open-projects", true)
     );
@@ -173,6 +174,9 @@ export default function ProjectsPage({
 
         async function loadData() {
             try {
+                setLookupsLoaded(false);
+                const storedOrganizationId = readStoredNumber("dev-productivity:projects:selected-organization-id");
+                const storedClientId = readStoredNumber("dev-productivity:projects:selected-client-id");
                 const [nextClients, nextVisibleClients, nextProjects] = await Promise.all([
                     loadClients(),
                     loadVisibleClients(),
@@ -183,8 +187,6 @@ export default function ProjectsPage({
                     return;
                 }
 
-                const storedOrganizationId = readStoredNumber("dev-productivity:projects:selected-organization-id");
-                const storedClientId = readStoredNumber("dev-productivity:projects:selected-client-id");
                 const initialOrganizationId =
                     storedOrganizationId != null && organizations.some(organization => organization.id === storedOrganizationId)
                         ? storedOrganizationId
@@ -211,6 +213,7 @@ export default function ProjectsPage({
                 setSelectedOrganizationId(initialOrganizationId);
                 setSelectedClientId(initialClientId);
                 setSelectedProjectId(initialProjectId);
+                setLookupsLoaded(true);
             } catch {
                 if (!active) {
                     return;
@@ -262,6 +265,10 @@ export default function ProjectsPage({
     }, [organizations, selectedOrganizationId]);
 
     useEffect(() => {
+        if (!lookupsLoaded) {
+            return;
+        }
+
         if (clients.length === 0) {
             if (selectedClientId != null) {
                 setSelectedClientId(null);
@@ -270,11 +277,16 @@ export default function ProjectsPage({
             return;
         }
 
-        if (selectedClientId == null || !filteredClients.some(client => client.id === selectedClientId)) {
-            setSelectedClientId(null);
-            sessionStorage.removeItem("dev-productivity:projects:selected-client-id");
+        if (selectedClientId != null && !filteredClients.some(client => sameId(client.id, selectedClientId))) {
+            const nextClientId = filteredClients[0]?.id ?? null;
+            setSelectedClientId(nextClientId);
+            if (nextClientId == null) {
+                sessionStorage.removeItem("dev-productivity:projects:selected-client-id");
+            } else {
+                sessionStorage.setItem("dev-productivity:projects:selected-client-id", String(nextClientId));
+            }
         }
-    }, [filteredClients, selectedClientId]);
+    }, [clients.length, filteredClients, lookupsLoaded, selectedClientId]);
 
     useEffect(() => {
         if (filteredProjects.length === 0) {
@@ -725,7 +737,7 @@ export default function ProjectsPage({
                         </div>
                     </div>
 
-                    <div className="tracking-panel-body organizations-panel-body">
+                    <div className="tracking-panel-body organizations-panel-body directory-table-scroll">
                         <table className="app-master-data-table organizations-table tasks-table">
                             <colgroup>
                                 <col className="projects-col-completed" />

@@ -352,7 +352,7 @@ export default function OrganizationsPage({ currentOrganizationId = null, onCurr
                         </div>
                     </div>
 
-                    <div className="tracking-panel-body organizations-panel-body">
+                    <div className="tracking-panel-body organizations-panel-body directory-table-scroll">
                         <table className="app-master-data-table organizations-table tasks-table">
                             <colgroup>
                                 <col className="organizations-col-current" />
