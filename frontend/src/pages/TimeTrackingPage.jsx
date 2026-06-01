@@ -8,6 +8,7 @@ import {
     createTimeEntry,
     deleteTimeEntry,
     getClients,
+    getVisibleClients,
     getProjects,
     getTasks,
     getTimeEntriesByDate,
@@ -125,6 +126,25 @@ function getProjectLabel(project) {
     return project?.shortName ?? project?.fullName ?? "";
 }
 
+function getClientOptions(allClients, visibleClients, organizationId, currentClientId = null) {
+    const options = organizationId == null
+        ? visibleClients
+        : visibleClients.filter(client => sameId(client.organizationId, organizationId));
+    const currentClient = currentClientId == null
+        ? null
+        : allClients.find(client => sameId(client.id, currentClientId));
+
+    if (
+        currentClient
+        && (organizationId == null || sameId(currentClient.organizationId, organizationId))
+        && !options.some(client => sameId(client.id, currentClient.id))
+    ) {
+        return [...options, currentClient];
+    }
+
+    return options;
+}
+
 function WorklogEntryModal({
     mode,
     draftEntry,
@@ -137,8 +157,11 @@ function WorklogEntryModal({
     onCancel
 }) {
     const availableClients = draftEntry.organizationId == null
-        ? clients
-        : clients.filter(client => sameId(client.organizationId, draftEntry.organizationId));
+        ? clients.filter(client => isClientSelectable(client, draftEntry.clientId))
+        : clients.filter(client =>
+            sameId(client.organizationId, draftEntry.organizationId)
+            && isClientSelectable(client, draftEntry.clientId)
+        );
     const availableProjects = draftEntry.organizationId == null || draftEntry.clientId == null
         ? []
         : projects.filter(project =>
@@ -325,6 +348,7 @@ export default function TimeTrackingPage({
 
     const [entries, setEntries] = useState([]);
     const [clients, setClients] = useState([]);
+    const [visibleClients, setVisibleClients] = useState([]);
     const [projects, setProjects] = useState([]);
     const [tasks, setTasks] = useState([]);
     const [selectedMonth, setSelectedMonth] = useState(initialSelectedDateValue.getMonth());
@@ -356,13 +380,19 @@ export default function TimeTrackingPage({
 
         async function loadLookups() {
             try {
-                const [nextClients, nextProjects, nextTasks] = await Promise.all([getClients(), getProjects(), getTasks()]);
+                const [nextClients, nextVisibleClients, nextProjects, nextTasks] = await Promise.all([
+                    getClients(),
+                    getVisibleClients(),
+                    getProjects(),
+                    getTasks()
+                ]);
 
                 if (!active) {
                     return;
                 }
 
                 setClients(nextClients);
+                setVisibleClients(nextVisibleClients);
                 setProjects(nextProjects);
                 setTasks(nextTasks);
                 setApiErrorMessage("");
@@ -931,9 +961,7 @@ export default function TimeTrackingPage({
 
     const entryOrganizations = organizations;
     const entryClients = draftEntry
-        ? clients.filter(client =>
-            draftEntry.organizationId == null || sameId(client.organizationId, draftEntry.organizationId)
-        )
+        ? getClientOptions(clients, visibleClients, draftEntry.organizationId, draftEntry.clientId)
         : [];
     const entryProjects = draftEntry
         ? projects.filter(project =>

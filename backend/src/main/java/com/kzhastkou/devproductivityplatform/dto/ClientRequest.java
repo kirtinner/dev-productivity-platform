@@ -15,4 +15,6 @@ public class ClientRequest {
 
     @NotBlank
     private String fullName;
+
+    private Boolean notDisplayed = Boolean.FALSE;
 }

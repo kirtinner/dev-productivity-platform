@@ -11,7 +11,8 @@ function createClientDraft(organizationId) {
         id: null,
         organizationId,
         shortName: "",
-        fullName: ""
+        fullName: "",
+        notDisplayed: false
     };
 }
 
@@ -267,7 +268,8 @@ export default function ClientsPage({
             const payload = {
                 organizationId: draftClient.organizationId,
                 shortName: draftClient.shortName.trim(),
-                fullName: draftClient.fullName.trim()
+                fullName: draftClient.fullName.trim(),
+                notDisplayed: Boolean(draftClient.notDisplayed)
             };
             const savedClient = isNewClient
                 ? await apiCreateClient(payload)
@@ -346,11 +348,21 @@ export default function ClientsPage({
                 onClick={() => handleRowSelect(client)}
                 onDoubleClick={() => handleRowEditRequest(client)}
             >
+                <td className="tasks-completed-cell">
+                    {client.notDisplayed ? (
+                        <span className="tasks-completed-indicator" aria-label="Hidden" title="Hidden">
+                            {"\u2713"}
+                        </span>
+                    ) : null}
+                </td>
                 <td>
                     <span className="organizations-readonly-cell">{organizationLabel}</span>
                 </td>
                 <td>
                     <span className="organizations-readonly-cell">{client.shortName}</span>
+                </td>
+                <td>
+                    <span className="organizations-readonly-cell">{client.fullName}</span>
                 </td>
             </tr>
         );
@@ -436,16 +448,20 @@ export default function ClientsPage({
                         </div>
                     </div>
 
-                    <div className="tracking-panel-body organizations-panel-body">
+                    <div className="tracking-panel-body organizations-panel-body clients-table-scroll">
                         <table className="app-master-data-table organizations-table tasks-table">
                             <colgroup>
+                                <col className="clients-col-hide" />
                                 <col className="organizations-col-short" />
                                 <col className="organizations-col-short" />
+                                <col className="clients-col-full" />
                             </colgroup>
                             <thead>
                                 <tr>
+                                    <th>Hide</th>
                                     <th>Organization</th>
                                     <th>Short Name</th>
+                                    <th>Full Name</th>
                                 </tr>
                             </thead>
                             <tbody>{filteredClients.map(renderRow)}</tbody>
@@ -466,7 +482,7 @@ export default function ClientsPage({
                             <h3 id="clients-editor-title">{editorMode === "add" ? "Add Client" : "Edit Client"}</h3>
                         </div>
                         <div className="tracking-modal-body">
-                            <div className="tracking-modal-fields">
+                            <div className="tracking-modal-fields clients-editor-fields">
                                 <label className="tracking-modal-field">
                                     <span>Organization</span>
                                     <div className="selector-clear-control">
@@ -504,6 +520,15 @@ export default function ClientsPage({
                                         type="text"
                                         value={draftClient.fullName ?? ""}
                                         onChange={event => handleDraftChange("fullName", event.target.value)}
+                                    />
+                                </label>
+
+                                <label className="tracking-modal-field clients-hide-field">
+                                    <span>Hide</span>
+                                    <input
+                                        type="checkbox"
+                                        checked={Boolean(draftClient.notDisplayed)}
+                                        onChange={event => handleDraftChange("notDisplayed", event.target.checked)}
                                     />
                                 </label>
                             </div>

@@ -76,7 +76,7 @@ public class ExcelImportService {
                     List.of("full_name")),
             sheet("Clients",
                     List.of("code", "organization_code", "short_name"),
-                    List.of("full_name")),
+                    List.of("full_name", "not_displayed")),
             sheet("Projects",
                     List.of("code", "organization_code", "client_code", "short_name", "full_name"),
                     List.of("description", "completed")),
@@ -106,7 +106,7 @@ public class ExcelImportService {
 
     public ExcelImportSchemaResponse getSchema() {
         return ExcelImportSchemaResponse.builder()
-                .warning("Import will replace all current data for the current user account.")
+                .warning("Full data import will replace all current data for the current user account.")
                 .replacedData(REPLACED_DATA)
                 .sheets(SHEET_SCHEMAS)
                 .build();
@@ -227,6 +227,7 @@ public class ExcelImportService {
             item.organizationCode = row.value("organization_code");
             item.shortName = row.value("short_name");
             item.fullName = row.value("full_name");
+            item.notDisplayed = parseBoolean(row, "Clients", "not_displayed", parsed, true);
             validateRequired(row, item, parsed);
             parsed.clients.add(item);
             parsed.clientByCode.putIfAbsent(item.code, item);
@@ -528,6 +529,7 @@ public class ExcelImportService {
                     .organization(organization)
                     .shortName(row.shortName)
                     .fullName(defaultString(row.fullName, row.shortName))
+                    .notDisplayed(Boolean.TRUE.equals(row.notDisplayed))
                     .build());
             clients.put(row.code, client);
         }
@@ -737,14 +739,14 @@ public class ExcelImportService {
         }
 
         String normalized = value.trim().toLowerCase(Locale.ROOT);
-        if (List.of("true", "yes", "1").contains(normalized)) {
+        if (List.of("true", "yes", "1", "истина").contains(normalized)) {
             return Boolean.TRUE;
         }
-        if (List.of("false", "no", "0").contains(normalized)) {
+        if (List.of("false", "no", "0", "ложь").contains(normalized)) {
             return Boolean.FALSE;
         }
 
-        parsed.addError(sheet, row.rowNumber, field, "Value must be TRUE/FALSE, Yes/No, or 1/0.");
+        parsed.addError(sheet, row.rowNumber, field, "Value must be TRUE/FALSE, Yes/No, 1/0, or истина/ложь.");
         return defaultFalse ? Boolean.FALSE : null;
     }
 
@@ -1037,6 +1039,7 @@ public class ExcelImportService {
         private String organizationCode;
         private String shortName;
         private String fullName;
+        private Boolean notDisplayed;
 
         private ClientRow(int rowNumber) {
             super("Clients", rowNumber);

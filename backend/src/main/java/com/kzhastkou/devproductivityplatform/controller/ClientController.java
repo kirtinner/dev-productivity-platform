@@ -23,6 +23,11 @@ public class ClientController {
         return service.findAll(resolveCurrentUserId());
     }
 
+    @GetMapping("/visible")
+    public List<ClientResponse> listVisible() {
+        return service.findVisible(resolveCurrentUserId());
+    }
+
     @GetMapping("/{id:\\d+}")
     public ClientResponse getById(@PathVariable Long id) {
         return service.findById(id, resolveCurrentUserId());

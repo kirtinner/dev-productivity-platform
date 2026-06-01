@@ -151,6 +151,26 @@ class ExcelImportServiceIntegrationTest {
                 });
     }
 
+    @Test
+    void importPersistsClientNotDisplayedFlag() throws IOException {
+        Developer developer = developerRepository.saveAndFlush(Developer.builder()
+                .email("import-hidden-client-" + System.nanoTime() + "@example.test")
+                .password("test")
+                .role(Role.USER)
+                .build());
+        developerIds.add(developer.getId());
+
+        ExcelImportResult result = excelImportService.importData(workbookFileWithHiddenClient(), developer.getId());
+
+        assertThat(result.isImported()).isTrue();
+        assertThat(clientRepository.findByDeveloperIdOrderByIdAsc(developer.getId()))
+                .singleElement()
+                .satisfies(client -> {
+                    assertThat(client.getShortName()).isEqualTo("Client 1");
+                    assertThat(client.getNotDisplayed()).isTrue();
+                });
+    }
+
     private void assertCounts(Long developerId, String organization, String client, String project, String softwareProduct) {
         assertThat(organizationRepository.findByDeveloperIdOrderByIdAsc(developerId))
                 .singleElement()
@@ -242,6 +262,33 @@ class ExcelImportServiceIntegrationTest {
         appendRow(workbook.getSheet("Projects"), "PROJECT1", "ORG1", "CLIENT1", "Project 1", "Project Full 1", "Project description", "false");
         appendRow(workbook.getSheet("SoftwareProducts"), "PRODUCT1", "Product 1", "Product Full 1");
         appendRow(workbook.getSheet("Tasks"), "TASK1", "ORG1", "CLIENT1", "PROJECT1", "PRODUCT1", "TASK-1", "Task 1", comment, description, implementationDetails, "1", "false", "");
+        appendRow(workbook.getSheet("TimeEntries"), "TASK1", "2026-05-24", "1", "Work");
+
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        workbook.write(output);
+        workbook.close();
+        return new MockMultipartFile(
+                "file",
+                "import.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                output.toByteArray()
+        );
+    }
+
+    private MockMultipartFile workbookFileWithHiddenClient() throws IOException {
+        Workbook workbook = new XSSFWorkbook();
+        createSheet(workbook, "Organizations", "code", "short_name", "full_name");
+        createSheet(workbook, "Clients", "code", "organization_code", "short_name", "full_name", "not_displayed");
+        createSheet(workbook, "Projects", "code", "organization_code", "client_code", "short_name", "full_name", "description", "completed");
+        createSheet(workbook, "SoftwareProducts", "code", "short_name", "full_name");
+        createSheet(workbook, "Tasks", "code", "organization_code", "client_code", "project_code", "software_product_code", "task_number", "name", "comment", "estimated_hours", "completed", "task_link");
+        createSheet(workbook, "TimeEntries", "task_code", "entry_date", "hours", "comment");
+
+        appendRow(workbook.getSheet("Organizations"), "ORG1", "Org 1", "Organization 1");
+        appendRow(workbook.getSheet("Clients"), "CLIENT1", "ORG1", "Client 1", "Client Full 1", "истина");
+        appendRow(workbook.getSheet("Projects"), "PROJECT1", "ORG1", "CLIENT1", "Project 1", "Project Full 1", "Project description", "false");
+        appendRow(workbook.getSheet("SoftwareProducts"), "PRODUCT1", "Product 1", "Product Full 1");
+        appendRow(workbook.getSheet("Tasks"), "TASK1", "ORG1", "CLIENT1", "PROJECT1", "PRODUCT1", "TASK-1", "Task 1", "", "1", "false", "");
         appendRow(workbook.getSheet("TimeEntries"), "TASK1", "2026-05-24", "1", "Work");
 
         ByteArrayOutputStream output = new ByteArrayOutputStream();

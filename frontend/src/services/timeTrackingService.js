@@ -37,7 +37,8 @@ function mapClient(client) {
         organizationId: client.organizationId ?? client.organization?.id ?? null,
         name: client.shortName ?? client.name ?? client.fullName ?? "",
         shortName: client.shortName ?? "",
-        fullName: client.fullName ?? client.name ?? ""
+        fullName: client.fullName ?? client.name ?? "",
+        notDisplayed: Boolean(client.notDisplayed)
     };
 }
 
@@ -117,6 +118,11 @@ export async function deleteTimeEntry(id) {
 
 export async function getClients() {
     const response = await api.get("/clients");
+    return response.data.map(mapClient);
+}
+
+export async function getVisibleClients() {
+    const response = await api.get("/clients/visible");
     return response.data.map(mapClient);
 }
 

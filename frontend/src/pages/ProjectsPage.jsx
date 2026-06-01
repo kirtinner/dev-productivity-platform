@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { getClients as loadClients } from "../services/clientsService";
+import { getClients as loadClients, getVisibleClients as loadVisibleClients } from "../services/clientsService";
 import {
     createProject as apiCreateProject,
     deleteProject as apiDeleteProject,
@@ -93,11 +93,35 @@ function resolveClientLabel(clients, clientId) {
     return clients.find(client => client.id === clientId)?.shortName ?? "";
 }
 
+function sameId(left, right) {
+    return left != null && right != null && String(left) === String(right);
+}
+
+function getClientOptions(allClients, visibleClients, organizationId, currentClientId = null) {
+    const options = organizationId == null
+        ? visibleClients
+        : visibleClients.filter(client => sameId(client.organizationId, organizationId));
+    const currentClient = currentClientId == null
+        ? null
+        : allClients.find(client => sameId(client.id, currentClientId));
+
+    if (
+        currentClient
+        && (organizationId == null || sameId(currentClient.organizationId, organizationId))
+        && !options.some(client => sameId(client.id, currentClient.id))
+    ) {
+        return [...options, currentClient];
+    }
+
+    return options;
+}
+
 export default function ProjectsPage({
     organizations = [],
     currentOrganizationId = null
 }) {
     const [clients, setClients] = useState([]);
+    const [visibleClients, setVisibleClients] = useState([]);
     const [projects, setProjects] = useState([]);
     const [showOnlyOpenProjects, setShowOnlyOpenProjects] = useState(
         readStoredBoolean("dev-productivity:projects:show-only-open-projects", true)
@@ -130,15 +154,15 @@ export default function ProjectsPage({
     const draftClients = useMemo(
         () => draftOrganizationId == null
             ? []
-            : clients.filter(client => client.organizationId === draftOrganizationId),
-        [clients, draftOrganizationId]
+            : getClientOptions(clients, visibleClients, draftOrganizationId, draftProject?.clientId ?? null),
+        [clients, draftOrganizationId, draftProject?.clientId, visibleClients]
     );
     const draftOrganizations = organizations;
     const filteredClients = useMemo(
         () => selectedOrganizationId == null
             ? []
-            : clients.filter(client => client.organizationId === selectedOrganizationId),
-        [clients, selectedOrganizationId]
+            : getClientOptions(clients, visibleClients, selectedOrganizationId),
+        [clients, selectedOrganizationId, visibleClients]
     );
 
     const selectedProject = filteredProjects.find(project => project.id === selectedProjectId) ?? null;
@@ -149,7 +173,11 @@ export default function ProjectsPage({
 
         async function loadData() {
             try {
-                const [nextClients, nextProjects] = await Promise.all([loadClients(), loadProjects()]);
+                const [nextClients, nextVisibleClients, nextProjects] = await Promise.all([
+                    loadClients(),
+                    loadVisibleClients(),
+                    loadProjects()
+                ]);
 
                 if (!active) {
                     return;
@@ -164,9 +192,9 @@ export default function ProjectsPage({
                             ? currentOrganizationId
                             : organizations[0]?.id ?? null;
                 const initialClients = initialOrganizationId == null
-                    ? nextClients
-                    : nextClients.filter(client => client.organizationId === initialOrganizationId);
-                const initialClientId = storedClientId != null && initialClients.some(client => client.id === storedClientId)
+                    ? nextVisibleClients
+                    : getClientOptions(nextClients, nextVisibleClients, initialOrganizationId);
+                const initialClientId = storedClientId != null && initialClients.some(client => sameId(client.id, storedClientId))
                     ? storedClientId
                     : initialClients[0]?.id ?? null;
                 const initialProjects = getVisibleProjectsForContext(
@@ -178,6 +206,7 @@ export default function ProjectsPage({
                 const initialProjectId = initialProjects[0]?.id ?? null;
 
                 setClients(nextClients);
+                setVisibleClients(nextVisibleClients);
                 setProjects(nextProjects);
                 setSelectedOrganizationId(initialOrganizationId);
                 setSelectedClientId(initialClientId);
@@ -262,9 +291,9 @@ export default function ProjectsPage({
 
     const applyFilterSelection = (organizationId, clientId = null, sourceProjects = projects) => {
         const nextOrganizationClients = organizationId == null
-            ? clients
-            : clients.filter(client => client.organizationId === organizationId);
-        const resolvedClientId = clientId != null && nextOrganizationClients.some(client => client.id === clientId)
+            ? visibleClients
+            : getClientOptions(clients, visibleClients, organizationId);
+        const resolvedClientId = clientId != null && nextOrganizationClients.some(client => sameId(client.id, clientId))
             ? clientId
             : null;
         const visibleProjects = getVisibleProjectsForContext(
@@ -346,8 +375,8 @@ export default function ProjectsPage({
 
         const nextClientId = parsedOrganizationId == null
             ? null
-            : draftProject?.clientId != null && clients.some(client =>
-                client.organizationId === parsedOrganizationId && client.id === draftProject.clientId
+            : draftProject?.clientId != null && getClientOptions(clients, visibleClients, parsedOrganizationId, draftProject.clientId).some(client =>
+                sameId(client.id, draftProject.clientId)
             )
                 ? draftProject.clientId
                 : null;
@@ -376,7 +405,9 @@ export default function ProjectsPage({
 
         const parsedOrganizationId = Number(nextOrganizationId);
         const nextClientId = selectedClientId != null && clients.some(client =>
-            client.organizationId === parsedOrganizationId && client.id === selectedClientId
+            sameId(client.organizationId, parsedOrganizationId)
+            && sameId(client.id, selectedClientId)
+            && visibleClients.some(visibleClient => sameId(visibleClient.id, client.id))
         )
             ? selectedClientId
             : null;

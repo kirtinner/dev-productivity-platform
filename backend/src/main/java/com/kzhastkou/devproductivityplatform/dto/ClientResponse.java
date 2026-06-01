@@ -12,4 +12,5 @@ public class ClientResponse {
     private String organizationName;
     private String shortName;
     private String fullName;
+    private Boolean notDisplayed;
 }

@@ -10,6 +10,8 @@ public interface ClientRepository extends JpaRepository<Client, Long> {
 
     List<Client> findByDeveloperIdOrderByIdAsc(Long developerId);
 
+    List<Client> findByDeveloperIdAndNotDisplayedFalseOrderByIdAsc(Long developerId);
+
     List<Client> findByDeveloperIdAndOrganizationId(Long developerId, Long organizationId);
 
     Optional<Client> findByIdAndDeveloperId(Long id, Long developerId);

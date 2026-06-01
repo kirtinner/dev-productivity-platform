@@ -19,6 +19,7 @@ public class DatabaseSequenceInitializer {
         allowEmptyCurrentOrganization();
         allowEmptyDeveloperOrganization();
         convertLongTextColumns();
+        addClientVisibilityColumn();
         backfillDeveloperOwnership();
         synchronizeSequence("organizations_id_seq", "organizations");
         synchronizeSequence("clients_id_seq", "clients");
@@ -48,6 +49,26 @@ public class DatabaseSequenceInitializer {
         alterColumnToText("tasks", "implementation_details");
         alterColumnToText("projects", "description");
         alterColumnToText("time_entries", "comment");
+    }
+
+    private void addClientVisibilityColumn() {
+        entityManager.createNativeQuery("""
+                ALTER TABLE IF EXISTS clients
+                ADD COLUMN IF NOT EXISTS not_displayed boolean
+                """).executeUpdate();
+        entityManager.createNativeQuery("""
+                UPDATE clients
+                SET not_displayed = false
+                WHERE not_displayed IS NULL
+                """).executeUpdate();
+        entityManager.createNativeQuery("""
+                ALTER TABLE IF EXISTS clients
+                ALTER COLUMN not_displayed SET DEFAULT false
+                """).executeUpdate();
+        entityManager.createNativeQuery("""
+                ALTER TABLE IF EXISTS clients
+                ALTER COLUMN not_displayed SET NOT NULL
+                """).executeUpdate();
     }
 
     private void alterColumnToText(String tableName, String columnName) {

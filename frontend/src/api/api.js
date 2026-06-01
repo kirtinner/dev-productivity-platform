@@ -26,7 +26,13 @@ api.interceptors.response.use(
             }
 
             if (status === 403) {
-                console.warn("Access denied (403)");
+                console.warn("Access denied (403)", {
+                    method: error.config?.method,
+                    url: error.config?.url,
+                    response: error.response?.data
+                });
+                localStorage.removeItem("token");
+                window.location.reload();
             }
         }
 

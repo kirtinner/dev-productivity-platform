@@ -38,6 +38,14 @@ public class ClientService {
     }
 
     @Transactional(readOnly = true)
+    public List<ClientResponse> findVisible(Long developerId) {
+        return clientRepository.findByDeveloperIdAndNotDisplayedFalseOrderByIdAsc(developerId)
+                .stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
     public ClientResponse findById(Long id, Long developerId) {
         return toResponse(findEntity(id, developerId));
     }
@@ -52,6 +60,7 @@ public class ClientService {
                 .organization(organization)
                 .shortName(request.getShortName().trim())
                 .fullName(request.getFullName().trim())
+                .notDisplayed(Boolean.TRUE.equals(request.getNotDisplayed()))
                 .build();
 
         return toResponse(clientRepository.save(client));
@@ -65,6 +74,7 @@ public class ClientService {
         client.setOrganization(organization);
         client.setShortName(request.getShortName().trim());
         client.setFullName(request.getFullName().trim());
+        client.setNotDisplayed(Boolean.TRUE.equals(request.getNotDisplayed()));
         return toResponse(clientRepository.save(client));
     }
 
@@ -103,6 +113,7 @@ public class ClientService {
                 .organizationName(client.getOrganization().getShortName())
                 .shortName(client.getShortName())
                 .fullName(client.getFullName())
+                .notDisplayed(Boolean.TRUE.equals(client.getNotDisplayed()))
                 .build();
     }
 }

@@ -2038,6 +2038,43 @@ textarea:focus {
   width: 13%;
 }
 
+.clients-col-hide {
+  width: 6%;
+}
+
+.clients-col-full {
+  width: 50%;
+}
+
+.tracking-modal-client-editor .clients-editor-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+}
+
+.clients-hide-field {
+  align-items: flex-start;
+}
+
+.clients-hide-field input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  align-self: flex-start;
+}
+
+.clients-table-scroll {
+  max-height: min(70vh, 760px);
+  overflow-y: auto;
+  overflow-x: auto;
+}
+
+.clients-table-scroll .app-master-data-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
 .tasks-col-name {
   width: 28%;
 }

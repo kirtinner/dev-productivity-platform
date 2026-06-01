@@ -66,7 +66,7 @@ function ValidationFailureDialog({ validation, onClose }) {
                 </div>
                 <div className="tracking-modal-body administration-result-body">
                     <p className="tracking-modal-text">
-                        Validation failed. Import was stopped. Fix the Excel file and try again.
+                        Validation failed. Full data import was stopped. Fix the Excel file and try again.
                     </p>
                     <div className="tracking-status-banner administration-status-banner">
                         Validation status: {validation?.status ?? "INVALID"}
@@ -105,10 +105,10 @@ function ImportSuccessDialog({ onClose }) {
                 aria-labelledby="administration-import-success-title"
             >
                 <div className="tracking-modal-header">
-                    <h3 id="administration-import-success-title">Import completed</h3>
+                    <h3 id="administration-import-success-title">Full Data Import completed</h3>
                 </div>
                 <div className="tracking-modal-body">
-                    <p className="tracking-modal-text">Import completed successfully.</p>
+                    <p className="tracking-modal-text">Full data import completed successfully.</p>
                 </div>
                 <div className="tracking-modal-actions">
                     <button type="button" className="tracking-modal-button" onClick={onClose}>
@@ -130,7 +130,7 @@ function ImportHelpDialog({ schema, loading, error, onClose }) {
                 aria-labelledby="administration-help-title"
             >
                 <div className="tracking-modal-header">
-                    <h3 id="administration-help-title">Import Information</h3>
+                    <h3 id="administration-help-title">Full Data Import Information</h3>
                 </div>
                 <div className="tracking-modal-body administration-help-body">
                     {loading ? (
@@ -140,9 +140,9 @@ function ImportHelpDialog({ schema, loading, error, onClose }) {
                     ) : (
                         <>
                             <section className="administration-help-section">
-                                <h4>Import warning</h4>
+                                <h4>Full data import warning</h4>
                                 <p className="tracking-modal-text">
-                                    {schema?.warning ?? "Import will replace all current data for the current user account."}
+                                    {schema?.warning ?? "Full data import will replace all current data for the current user account."}
                                 </p>
                                 <p className="tracking-modal-text">The following data will be replaced:</p>
                                 <ul className="tracking-modal-list">
@@ -276,7 +276,7 @@ export default function AdministrationPage() {
                 setValidationFailureOpen(true);
             }
         } catch (error) {
-            setMessage(getApiErrorMessage(error, "Unable to validate import file."));
+            setMessage(getApiErrorMessage(error, "Unable to validate full data import file."));
         } finally {
             setBusy(false);
         }
@@ -314,14 +314,14 @@ export default function AdministrationPage() {
                 setValidationFailureOpen(true);
             }
         } catch (error) {
-            setMessage(getApiErrorMessage(error, "Unable to import data."));
+            setMessage(getApiErrorMessage(error, "Unable to complete full data import."));
         } finally {
             setBusy(false);
         }
     };
 
-    const confirmTitle = "Import Data";
-    const confirmButtonText = "Import Data";
+    const confirmTitle = "Full Data Import";
+    const confirmButtonText = "Import All Data";
 
     return (
         <div className="tracking-main organizations-main administration-main">
@@ -337,14 +337,14 @@ export default function AdministrationPage() {
                 <section className="tracking-panel organizations-panel">
                     <div className="tracking-panel-header organizations-panel-header">
                         <div>
-                            <h3>Import Data</h3>
+                            <h3>Full Data Import</h3>
                         </div>
                         <button
                             type="button"
                             className="administration-help-button"
                             onClick={handleOpenHelp}
-                            title="Import format and requirements"
-                            aria-label="Import format and requirements"
+                            title="Full data import format and requirements"
+                            aria-label="Full data import format and requirements"
                         >
                             ?
                         </button>
@@ -385,7 +385,7 @@ export default function AdministrationPage() {
                                     onClick={handleImportData}
                                     disabled={!selectedFile || busy}
                                 >
-                                    Import Data
+                                    Import All Data
                                 </button>
                             </div>
 
@@ -434,7 +434,7 @@ export default function AdministrationPage() {
                                 Validation status: {validationResult?.status ?? "ALL_VALID"}
                             </div>
                             <p className="tracking-modal-text">
-                                The selected Excel file contains the following data for import:
+                                The selected Excel file contains the following data for full import:
                             </p>
                             <ImportCountsSummary validation={validationResult} />
                             <div className="administration-import-warning">
