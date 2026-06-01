@@ -172,7 +172,7 @@ function buildSheetXml(reportData) {
     });
 
     addRow([
-        inlineCell(`A${rowIndex}`, "Grand Total", 6),
+        inlineCell(`A${rowIndex}`, "Total for Period", 6),
         inlineCell(`B${rowIndex}`, "", 6),
         numberCell(`C${rowIndex}`, reportData.grandTotalHours, 7)
     ]);

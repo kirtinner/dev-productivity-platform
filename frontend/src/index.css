@@ -2055,9 +2055,12 @@ textarea:focus {
 }
 
 .reports-content-stack {
+  flex: 1 1 auto;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 12px;
+  overflow: hidden;
 }
 
 .reports-list-panel {
@@ -2125,12 +2128,51 @@ textarea:focus {
   margin: 0;
 }
 
-.reports-result-wrap {
-  flex: 1;
+.reports-result-panel {
+  flex: 0 1 auto;
   min-height: 0;
-  overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.reports-result-panel-header {
+  flex: 0 0 auto;
+}
+
+.reports-result-wrap {
+  flex: 0 1 auto;
+  min-height: 160px;
+  max-height: clamp(180px, 48vh, 560px);
+  overflow-x: auto;
+  overflow-y: auto;
   border: 1px solid #e5e9f0;
+  border-bottom: none;
   background: #ffffff;
+}
+
+.reports-result-table {
+  min-width: 760px;
+}
+
+.reports-total-summary-wrap {
+  flex: 0 0 auto;
+  border: 1px solid #b9d2ec;
+  border-top: none;
+  background: #dcebf9;
+  box-shadow: 0 -1px 3px rgba(28, 85, 135, 0.12);
+}
+
+.reports-total-summary-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 140px;
+}
+
+.reports-total-summary-row > div {
+  padding: 8px 10px;
+  color: #202c38;
+  font-size: 13px;
+  font-weight: 700;
+  border-top: 1px solid #b9d2ec;
 }
 
 .reports-empty-state {
@@ -2152,6 +2194,9 @@ textarea:focus {
 }
 
 .reports-result-table thead tr th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   background: #dcebf9;
   color: #202c38;
   font-weight: 700;
@@ -2175,13 +2220,7 @@ textarea:focus {
   white-space: nowrap;
 }
 
-.reports-result-table tbody tr.reports-grand-total-row td {
-  background: #dcebf9;
-  box-shadow: 0 1px 3px rgba(28, 85, 135, 0.12);
-  font-weight: 700 !important;
-}
-
-.reports-grand-total-row td:last-child {
+.reports-total-summary-row > div:last-child {
   text-align: right;
   white-space: nowrap;
 }

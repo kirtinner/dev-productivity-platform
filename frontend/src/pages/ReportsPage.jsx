@@ -260,42 +260,60 @@ export default function ReportsPage({ resetToken = 0 }) {
             return null;
         }
 
+        const totalForPeriod = reportData.grandTotalHours == null
+            ? (reportData.clients ?? []).reduce(
+                (clientSum, client) => clientSum + (client.tasks ?? []).reduce(
+                    (taskSum, task) => taskSum + Number(task.hours ?? 0),
+                    0
+                ),
+                0
+            )
+            : Number(reportData.grandTotalHours);
+
         return (
-            <table className="app-master-data-table organizations-table tasks-table reports-result-table">
-                <colgroup>
-                    <col className="reports-col-client" />
-                    <col className="reports-col-task" />
-                    <col className="reports-col-hours" />
-                </colgroup>
-                <thead>
-                    <tr className="reports-result-header-row">
-                        <th>Client</th>
-                        <th>Task</th>
-                        <th className="tasks-number-cell">Hours</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {reportData.clients.flatMap(client => [
-                        <tr key={`client-${client.clientId}`} className="reports-client-row">
-                            <td>{client.clientName}</td>
-                            <td></td>
-                            <td className="tasks-number-cell">{formatHours(client.totalHours)}</td>
-                        </tr>,
-                        ...client.tasks.map(task => (
-                            <tr key={`task-${client.clientId}-${task.taskId}`}>
-                                <td>{client.clientName}</td>
-                                <td>{task.taskName}</td>
-                                <td className="tasks-number-cell">{formatHours(task.hours)}</td>
+            <section className="tracking-panel organizations-panel reports-panel reports-result-panel">
+                <div className="tracking-panel-header organizations-panel-header reports-result-panel-header">
+                    <h3>Report Result</h3>
+                </div>
+                <div className="reports-result-wrap">
+                    <table className="app-master-data-table organizations-table tasks-table reports-result-table">
+                        <colgroup>
+                            <col className="reports-col-client" />
+                            <col className="reports-col-task" />
+                            <col className="reports-col-hours" />
+                        </colgroup>
+                        <thead>
+                            <tr className="reports-result-header-row">
+                                <th>Client</th>
+                                <th>Task</th>
+                                <th className="tasks-number-cell">Hours</th>
                             </tr>
-                        ))
-                    ])}
-                    <tr className="reports-grand-total-row">
-                        <td>Grand Total</td>
-                        <td></td>
-                        <td className="tasks-number-cell">{formatHours(reportData.grandTotalHours)}</td>
-                    </tr>
-                </tbody>
-            </table>
+                        </thead>
+                        <tbody>
+                            {reportData.clients.flatMap(client => [
+                                <tr key={`client-${client.clientId}`} className="reports-client-row">
+                                    <td>{client.clientName}</td>
+                                    <td></td>
+                                    <td className="tasks-number-cell">{formatHours(client.totalHours)}</td>
+                                </tr>,
+                                ...client.tasks.map(task => (
+                                    <tr key={`task-${client.clientId}-${task.taskId}`}>
+                                        <td>{client.clientName}</td>
+                                        <td>{task.taskName}</td>
+                                        <td className="tasks-number-cell">{formatHours(task.hours)}</td>
+                                    </tr>
+                                ))
+                            ])}
+                        </tbody>
+                    </table>
+                </div>
+                <div className="reports-total-summary-wrap" aria-label="Report total for period">
+                    <div className="reports-total-summary-row">
+                        <div>Total for Period</div>
+                        <div className="tasks-number-cell">{formatHours(totalForPeriod)}</div>
+                    </div>
+                </div>
+            </section>
         );
     };
 

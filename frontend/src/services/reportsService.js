@@ -21,11 +21,18 @@ export async function getWorkEffortReport(from, to) {
     const response = await api.get("/reports/work-effort", {
         params: { from, to }
     });
+    const clients = (response.data.clients ?? []).map(mapReportClient);
+    const fallbackGrandTotalHours = clients.reduce(
+        (sum, client) => sum + Number(client.totalHours ?? 0),
+        0
+    );
 
     return {
         from: response.data.from,
         to: response.data.to,
-        grandTotalHours: Number(response.data.grandTotalHours ?? 0),
-        clients: (response.data.clients ?? []).map(mapReportClient)
+        grandTotalHours: response.data.grandTotalHours == null
+            ? fallbackGrandTotalHours
+            : Number(response.data.grandTotalHours),
+        clients
     };
 }
