@@ -45,7 +45,10 @@ import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -239,6 +242,7 @@ public class ExcelImportService {
             item.softwareProductCode = row.value("software_product_code");
             item.taskNumber = row.value("task_number");
             item.name = row.value("name");
+            item.createdAt = parseDate(row, "Tasks", "created_at", parsed);
             item.comment = row.value("comment");
             item.description = row.value("description");
             item.implementationDetails = row.value("implementation_details");
@@ -267,7 +271,8 @@ public class ExcelImportService {
         for (String field : FullDataExcelSchema.SCHEMA_BY_SHEET.get(item.sheet).getRequiredColumns()) {
             if (isBlank(row.value(field))) {
                 item.valid = false;
-                parsed.addError(item.sheet, item.rowNumber, field, "Required field is empty.");
+                parsed.addError(item.sheet, item.rowNumber, field,
+                        "created_at".equals(field) ? "Required value is missing." : "Required field is empty.");
             }
         }
     }
@@ -548,7 +553,7 @@ public class ExcelImportService {
                     .estimatedHours(row.estimatedHours)
                     .completed(Boolean.TRUE.equals(row.completed))
                     .taskLink(row.taskLink)
-                    .createdAt(LocalDate.now())
+                    .createdAt(row.createdAt)
                     .build());
             tasks.put(row.code, task);
         }
@@ -758,11 +763,27 @@ public class ExcelImportService {
         }
 
         try {
-            return LocalDate.parse(value.trim());
+            return parseDateValue(value.trim());
         } catch (RuntimeException error) {
-            parsed.addError(sheet, row.rowNumber, field, "Date must be an Excel date or yyyy-MM-dd.");
+            parsed.addError(sheet, row.rowNumber, field, "Invalid date format.");
             return null;
         }
+    }
+
+    private LocalDate parseDateValue(String value) {
+        try {
+            return LocalDate.parse(value);
+        } catch (DateTimeParseException ignored) {
+            // Try supported date-time formats below.
+        }
+
+        try {
+            return LocalDateTime.parse(value).toLocalDate();
+        } catch (DateTimeParseException ignored) {
+            // Try the common Excel text export format below.
+        }
+
+        return LocalDateTime.parse(value, DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")).toLocalDate();
     }
 
     private Double parseDoubleValue(String value) {
@@ -1042,6 +1063,7 @@ public class ExcelImportService {
         private String softwareProductCode;
         private String taskNumber;
         private String name;
+        private LocalDate createdAt;
         private String comment;
         private String description;
         private String implementationDetails;

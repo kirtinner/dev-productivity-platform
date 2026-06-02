@@ -107,6 +107,12 @@ function getClientOptions(allClients, visibleClients, organizationId, currentCli
     return options;
 }
 
+function getVisibleClientOptions(visibleClients, organizationId) {
+    return organizationId == null
+        ? visibleClients
+        : visibleClients.filter(client => sameId(client.organizationId, organizationId));
+}
+
 function resolveOrganizationLabel(organizations, organizationId) {
     return organizations.find(organization => sameId(organization.id, organizationId))?.shortName ?? "";
 }
@@ -552,7 +558,7 @@ export default function TasksPage({
                             : organizations[0]?.id ?? null;
                 const initialClients = initialOrganizationId == null
                     ? []
-                    : getClientOptions(nextClients, nextVisibleClients, initialOrganizationId);
+                    : getVisibleClientOptions(nextVisibleClients, initialOrganizationId);
                 const initialClientId = storedClientId != null && initialClients.some(client => sameId(client.id, storedClientId))
                     ? storedClientId
                     : initialClients[0]?.id ?? null;
@@ -664,7 +670,7 @@ export default function TasksPage({
     const getContextDefaults = (organizationId, clientId = null, projectId = null, sourceProjects = projects) => {
         const nextOrganizationClients = organizationId == null
             ? visibleClients
-            : getClientOptions(clients, visibleClients, organizationId);
+            : getVisibleClientOptions(visibleClients, organizationId);
         const resolvedClientId = clientId != null && nextOrganizationClients.some(client => sameId(client.id, clientId))
             ? clientId
             : null;
@@ -841,10 +847,7 @@ export default function TasksPage({
             return;
         }
 
-        const nextClients = clients.filter(client =>
-            getClientOptions(clients, visibleClients, parsedOrganizationId, draftTask.clientId)
-                .some(option => sameId(option.id, client.id))
-        );
+        const nextClients = getClientOptions(clients, visibleClients, parsedOrganizationId, draftTask.clientId);
         const nextClientId = nextClients.some(client => sameId(client.id, draftTask.clientId))
             ? draftTask.clientId
             : null;
@@ -922,11 +925,8 @@ export default function TasksPage({
         }
 
         const parsedOrganizationId = Number(nextOrganizationId);
-        const nextClientId = selectedClientId != null && clients.some(client =>
-            sameId(client.organizationId, parsedOrganizationId)
-            && sameId(client.id, selectedClientId)
-            && visibleClients.some(visibleClient => sameId(visibleClient.id, client.id))
-        )
+        const nextOrganizationClients = getVisibleClientOptions(visibleClients, parsedOrganizationId);
+        const nextClientId = selectedClientId != null && nextOrganizationClients.some(client => sameId(client.id, selectedClientId))
             ? selectedClientId
             : null;
 
@@ -1156,8 +1156,8 @@ export default function TasksPage({
     const filterClients = useMemo(
         () => selectedOrganizationId == null
             ? []
-            : getClientOptions(clients, visibleClients, selectedOrganizationId),
-        [clients, selectedOrganizationId, visibleClients]
+            : getVisibleClientOptions(visibleClients, selectedOrganizationId),
+        [selectedOrganizationId, visibleClients]
     );
     const filterProjects = useMemo(
         () => selectedOrganizationId == null || selectedClientId == null

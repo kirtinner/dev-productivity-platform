@@ -31,7 +31,7 @@ public final class FullDataExcelSchema {
                     List.of("code", "short_name"),
                     List.of("full_name")),
             sheet("Tasks",
-                    List.of("code", "organization_code", "client_code", "project_code", "software_product_code", "task_number", "name"),
+                    List.of("code", "organization_code", "client_code", "project_code", "software_product_code", "task_number", "name", "created_at"),
                     List.of("comment", "description", "implementation_details", "estimated_hours", "completed", "task_link")),
             sheet("TimeEntries",
                     List.of("task_code", "entry_date", "hours"),

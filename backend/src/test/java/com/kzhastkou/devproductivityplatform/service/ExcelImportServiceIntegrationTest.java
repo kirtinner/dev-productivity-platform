@@ -15,6 +15,7 @@ import com.kzhastkou.devproductivityplatform.repository.UserSettingsRepository;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -23,7 +24,9 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.mock.web.MockMultipartFile;
 
 import java.io.ByteArrayOutputStream;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -189,6 +192,7 @@ class ExcelImportServiceIntegrationTest {
         FullDataExportFile exportFile = fullDataExportService.exportForDownload(developer.getId());
         assertThat(exportFile.fileName()).startsWith("dev_platform_full_export_").endsWith(".xlsx");
         assertThat(exportFile.content()).isNotEmpty();
+        assertExportContainsTaskCreatedAt(exportFile.content(), "2026-05-20");
 
         ExcelImportResult importBack = excelImportService.importData(new MockMultipartFile(
                 "file",
@@ -207,8 +211,46 @@ class ExcelImportServiceIntegrationTest {
                 });
         assertThat(projectRepository.findByDeveloperIdOrderByIdAsc(developer.getId())).hasSize(1);
         assertThat(softwareProductRepository.findByDeveloperIdOrderByIdAsc(developer.getId())).hasSize(1);
-        assertThat(taskRepository.findByDeveloperIdOrderByIdAsc(developer.getId())).hasSize(1);
+        assertThat(taskRepository.findByDeveloperIdOrderByIdAsc(developer.getId()))
+                .singleElement()
+                .satisfies(task -> assertThat(task.getCreatedAt()).isEqualTo(LocalDate.of(2026, 5, 20)));
         assertThat(timeEntryRepository.findByDeveloperId(developer.getId())).hasSize(1);
+    }
+
+    private void assertExportContainsTaskCreatedAt(byte[] content, String expectedDate) throws IOException {
+        try (Workbook workbook = WorkbookFactory.create(new ByteArrayInputStream(content))) {
+            Sheet tasks = workbook.getSheet("Tasks");
+            assertThat(tasks).isNotNull();
+
+            Row header = tasks.getRow(0);
+            int createdAtColumn = -1;
+            for (int index = 0; index < header.getLastCellNum(); index++) {
+                if ("created_at".equals(header.getCell(index).getStringCellValue())) {
+                    createdAtColumn = index;
+                    break;
+                }
+            }
+
+            assertThat(createdAtColumn).isGreaterThanOrEqualTo(0);
+            assertThat(tasks.getRow(1).getCell(createdAtColumn).getStringCellValue()).isEqualTo(expectedDate);
+        }
+    }
+
+    @Test
+    void importPersistsTaskCreatedAt() throws IOException {
+        Developer developer = developerRepository.saveAndFlush(Developer.builder()
+                .email("import-task-created-at-" + System.nanoTime() + "@example.test")
+                .password("test")
+                .role(Role.USER)
+                .build());
+        developerIds.add(developer.getId());
+
+        ExcelImportResult result = excelImportService.importData(workbookFile("CREATED"), developer.getId());
+
+        assertThat(result.isImported()).isTrue();
+        assertThat(taskRepository.findByDeveloperIdOrderByIdAsc(developer.getId()))
+                .singleElement()
+                .satisfies(task -> assertThat(task.getCreatedAt()).isEqualTo(LocalDate.of(2026, 5, 20)));
     }
 
     private void assertCounts(Long developerId, String organization, String client, String project, String softwareProduct) {
@@ -228,7 +270,9 @@ class ExcelImportServiceIntegrationTest {
                 .singleElement()
                 .extracting("shortName")
                 .isEqualTo(softwareProduct);
-        assertThat(taskRepository.findByDeveloperIdOrderByIdAsc(developerId)).hasSize(1);
+        assertThat(taskRepository.findByDeveloperIdOrderByIdAsc(developerId))
+                .singleElement()
+                .satisfies(task -> assertThat(task.getCreatedAt()).isEqualTo(LocalDate.of(2026, 5, 20)));
         assertThat(timeEntryRepository.findByDeveloperId(developerId)).hasSize(1);
     }
 
@@ -238,14 +282,14 @@ class ExcelImportServiceIntegrationTest {
         createSheet(workbook, "Clients", "code", "organization_code", "short_name", "full_name");
         createSheet(workbook, "Projects", "code", "organization_code", "client_code", "short_name", "full_name", "description", "completed");
         createSheet(workbook, "SoftwareProducts", "code", "short_name", "full_name");
-        createSheet(workbook, "Tasks", "code", "organization_code", "client_code", "project_code", "software_product_code", "task_number", "name", "comment", "estimated_hours", "completed", "task_link");
+        createSheet(workbook, "Tasks", "code", "organization_code", "client_code", "project_code", "software_product_code", "task_number", "name", "created_at", "comment", "estimated_hours", "completed", "task_link");
         createSheet(workbook, "TimeEntries", "task_code", "entry_date", "hours", "comment");
 
         appendRow(workbook.getSheet("Organizations"), "ORG" + suffix, "Org " + suffix, "Organization " + suffix);
         appendRow(workbook.getSheet("Clients"), "CLIENT" + suffix, "ORG" + suffix, "Client " + suffix, "Client Full " + suffix);
         appendRow(workbook.getSheet("Projects"), "PROJECT" + suffix, "ORG" + suffix, "CLIENT" + suffix, "Project " + suffix, "Project Full " + suffix, "Description " + suffix, "false");
         appendRow(workbook.getSheet("SoftwareProducts"), "PRODUCT" + suffix, "Product " + suffix, "Product Full " + suffix);
-        appendRow(workbook.getSheet("Tasks"), "TASK" + suffix, "ORG" + suffix, "CLIENT" + suffix, "PROJECT" + suffix, "PRODUCT" + suffix, "TASK-" + suffix, "Task " + suffix, "", "1", "false", "");
+        appendRow(workbook.getSheet("Tasks"), "TASK" + suffix, "ORG" + suffix, "CLIENT" + suffix, "PROJECT" + suffix, "PRODUCT" + suffix, "TASK-" + suffix, "Task " + suffix, "2026-05-20", "", "1", "false", "");
         appendRow(workbook.getSheet("TimeEntries"), "TASK" + suffix, "2026-05-24", "1", "Work " + suffix);
 
         ByteArrayOutputStream output = new ByteArrayOutputStream();
@@ -265,7 +309,7 @@ class ExcelImportServiceIntegrationTest {
         createSheet(workbook, "Clients", "code", "organization_code", "short_name", "full_name");
         createSheet(workbook, "Projects", "code", "organization_code", "client_code", "short_name", "full_name", "description", "completed");
         createSheet(workbook, "SoftwareProducts", "code", "short_name", "full_name");
-        createSheet(workbook, "Tasks", "code", "organization_code", "client_code", "project_code", "software_product_code", "task_number", "name", "comment", "estimated_hours", "completed", "task_link");
+        createSheet(workbook, "Tasks", "code", "organization_code", "client_code", "project_code", "software_product_code", "task_number", "name", "created_at", "comment", "estimated_hours", "completed", "task_link");
         createSheet(workbook, "TimeEntries", "task_code", "entry_date", "hours", "comment");
 
         appendRow(workbook.getSheet("Organizations"), "ORG1", "Org 1", "Organization 1");
@@ -274,7 +318,7 @@ class ExcelImportServiceIntegrationTest {
         appendRow(workbook.getSheet("Projects"), "PROJECT1", "ORG1", "CLIENT1", "Shared Project", "Project Full 1", "", "false");
         appendRow(workbook.getSheet("Projects"), "PROJECT2", "ORG1", "CLIENT2", "Shared Project", "Project Full 2", "", "false");
         appendRow(workbook.getSheet("SoftwareProducts"), "PRODUCT1", "Product 1", "Product Full 1");
-        appendRow(workbook.getSheet("Tasks"), "TASK1", "ORG1", "CLIENT1", "PROJECT1", "PRODUCT1", "TASK-1", "Task 1", "", "1", "false", "");
+        appendRow(workbook.getSheet("Tasks"), "TASK1", "ORG1", "CLIENT1", "PROJECT1", "PRODUCT1", "TASK-1", "Task 1", "2026-05-20", "", "1", "false", "");
         appendRow(workbook.getSheet("TimeEntries"), "TASK1", "2026-05-24", "1", "Work");
 
         ByteArrayOutputStream output = new ByteArrayOutputStream();
@@ -294,14 +338,14 @@ class ExcelImportServiceIntegrationTest {
         createSheet(workbook, "Clients", "code", "organization_code", "short_name", "full_name");
         createSheet(workbook, "Projects", "code", "organization_code", "client_code", "short_name", "full_name", "description", "completed");
         createSheet(workbook, "SoftwareProducts", "code", "short_name", "full_name");
-        createSheet(workbook, "Tasks", "code", "organization_code", "client_code", "project_code", "software_product_code", "task_number", "name", "comment", "description", "implementation_details", "estimated_hours", "completed", "task_link");
+        createSheet(workbook, "Tasks", "code", "organization_code", "client_code", "project_code", "software_product_code", "task_number", "name", "created_at", "comment", "description", "implementation_details", "estimated_hours", "completed", "task_link");
         createSheet(workbook, "TimeEntries", "task_code", "entry_date", "hours", "comment");
 
         appendRow(workbook.getSheet("Organizations"), "ORG1", "Org 1", "Organization 1");
         appendRow(workbook.getSheet("Clients"), "CLIENT1", "ORG1", "Client 1", "Client Full 1");
         appendRow(workbook.getSheet("Projects"), "PROJECT1", "ORG1", "CLIENT1", "Project 1", "Project Full 1", "Project description", "false");
         appendRow(workbook.getSheet("SoftwareProducts"), "PRODUCT1", "Product 1", "Product Full 1");
-        appendRow(workbook.getSheet("Tasks"), "TASK1", "ORG1", "CLIENT1", "PROJECT1", "PRODUCT1", "TASK-1", "Task 1", comment, description, implementationDetails, "1", "false", "");
+        appendRow(workbook.getSheet("Tasks"), "TASK1", "ORG1", "CLIENT1", "PROJECT1", "PRODUCT1", "TASK-1", "Task 1", "2026-05-20", comment, description, implementationDetails, "1", "false", "");
         appendRow(workbook.getSheet("TimeEntries"), "TASK1", "2026-05-24", "1", "Work");
 
         ByteArrayOutputStream output = new ByteArrayOutputStream();
@@ -321,14 +365,14 @@ class ExcelImportServiceIntegrationTest {
         createSheet(workbook, "Clients", "code", "organization_code", "short_name", "full_name", "not_displayed");
         createSheet(workbook, "Projects", "code", "organization_code", "client_code", "short_name", "full_name", "description", "completed");
         createSheet(workbook, "SoftwareProducts", "code", "short_name", "full_name");
-        createSheet(workbook, "Tasks", "code", "organization_code", "client_code", "project_code", "software_product_code", "task_number", "name", "comment", "estimated_hours", "completed", "task_link");
+        createSheet(workbook, "Tasks", "code", "organization_code", "client_code", "project_code", "software_product_code", "task_number", "name", "created_at", "comment", "estimated_hours", "completed", "task_link");
         createSheet(workbook, "TimeEntries", "task_code", "entry_date", "hours", "comment");
 
         appendRow(workbook.getSheet("Organizations"), "ORG1", "Org 1", "Organization 1");
         appendRow(workbook.getSheet("Clients"), "CLIENT1", "ORG1", "Client 1", "Client Full 1", "истина");
         appendRow(workbook.getSheet("Projects"), "PROJECT1", "ORG1", "CLIENT1", "Project 1", "Project Full 1", "Project description", "false");
         appendRow(workbook.getSheet("SoftwareProducts"), "PRODUCT1", "Product 1", "Product Full 1");
-        appendRow(workbook.getSheet("Tasks"), "TASK1", "ORG1", "CLIENT1", "PROJECT1", "PRODUCT1", "TASK-1", "Task 1", "", "1", "false", "");
+        appendRow(workbook.getSheet("Tasks"), "TASK1", "ORG1", "CLIENT1", "PROJECT1", "PRODUCT1", "TASK-1", "Task 1", "2026-05-20", "", "1", "false", "");
         appendRow(workbook.getSheet("TimeEntries"), "TASK1", "2026-05-24", "1", "Work");
 
         ByteArrayOutputStream output = new ByteArrayOutputStream();

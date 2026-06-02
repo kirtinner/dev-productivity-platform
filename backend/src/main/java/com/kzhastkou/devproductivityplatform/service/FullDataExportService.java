@@ -216,6 +216,7 @@ public class FullDataExportService {
                     task.getSoftwareProduct() == null ? "" : productCodes.get(task.getSoftwareProduct().getId()),
                     task.getTaskNumber(),
                     task.getName(),
+                    task.getCreatedAt(),
                     task.getComment(),
                     task.getDescription(),
                     task.getImplementationDetails(),
