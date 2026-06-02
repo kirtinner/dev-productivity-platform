@@ -23,3 +23,12 @@ logging:
     org.springframework.dao: DEBUG
     org.hibernate.engine.jdbc.spi.SqlExceptionHelper: DEBUG
     org.springframework.web: INFO
+
+app:
+  full-data-export:
+    scheduled:
+      enabled: false
+      cron: "0 0 2 * * *"
+      export-dir: "D:/YandexDisk/DevProductivityPlatform/Backups"
+      retention-days: 30
+      developer-id: 1

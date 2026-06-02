@@ -18,6 +18,8 @@ public interface TimeEntryRepository extends JpaRepository<TimeEntry, Long> {
 
     List<TimeEntry> findByDeveloperId(Long developerId);
 
+    List<TimeEntry> findByDeveloperIdOrderByDateAscIdAsc(Long developerId);
+
     List<TimeEntry> findByDeveloperIdAndDate(Long developerId, LocalDate date);
 
     List<TimeEntry> findByDeveloperIdAndDateBetweenOrderByDateAscIdAsc(Long developerId, LocalDate from, LocalDate to);

@@ -1,6 +1,7 @@
 package com.kzhastkou.devproductivityplatform.service;
 
 import com.kzhastkou.devproductivityplatform.dto.ExcelImportResult;
+import com.kzhastkou.devproductivityplatform.dto.FullDataExportFile;
 import com.kzhastkou.devproductivityplatform.entity.Developer;
 import com.kzhastkou.devproductivityplatform.entity.Role;
 import com.kzhastkou.devproductivityplatform.repository.ClientRepository;
@@ -33,6 +34,8 @@ class ExcelImportServiceIntegrationTest {
 
     @Autowired
     private ExcelImportService excelImportService;
+    @Autowired
+    private FullDataExportService fullDataExportService;
     @Autowired
     private DeveloperRepository developerRepository;
     @Autowired
@@ -169,6 +172,43 @@ class ExcelImportServiceIntegrationTest {
                     assertThat(client.getShortName()).isEqualTo("Client 1");
                     assertThat(client.getNotDisplayed()).isTrue();
                 });
+    }
+
+    @Test
+    void fullDataExportCanBeImportedBack() throws IOException {
+        Developer developer = developerRepository.saveAndFlush(Developer.builder()
+                .email("full-export-cycle-" + System.nanoTime() + "@example.test")
+                .password("test")
+                .role(Role.USER)
+                .build());
+        developerIds.add(developer.getId());
+
+        ExcelImportResult initialImport = excelImportService.importData(workbookFileWithHiddenClient(), developer.getId());
+        assertThat(initialImport.isImported()).isTrue();
+
+        FullDataExportFile exportFile = fullDataExportService.exportForDownload(developer.getId());
+        assertThat(exportFile.fileName()).startsWith("dev_platform_full_export_").endsWith(".xlsx");
+        assertThat(exportFile.content()).isNotEmpty();
+
+        ExcelImportResult importBack = excelImportService.importData(new MockMultipartFile(
+                "file",
+                exportFile.fileName(),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                exportFile.content()
+        ), developer.getId());
+
+        assertThat(importBack.isImported()).isTrue();
+        assertThat(organizationRepository.findByDeveloperIdOrderByIdAsc(developer.getId())).hasSize(1);
+        assertThat(clientRepository.findByDeveloperIdOrderByIdAsc(developer.getId()))
+                .singleElement()
+                .satisfies(client -> {
+                    assertThat(client.getShortName()).isEqualTo("Client 1");
+                    assertThat(client.getNotDisplayed()).isTrue();
+                });
+        assertThat(projectRepository.findByDeveloperIdOrderByIdAsc(developer.getId())).hasSize(1);
+        assertThat(softwareProductRepository.findByDeveloperIdOrderByIdAsc(developer.getId())).hasSize(1);
+        assertThat(taskRepository.findByDeveloperIdOrderByIdAsc(developer.getId())).hasSize(1);
+        assertThat(timeEntryRepository.findByDeveloperId(developer.getId())).hasSize(1);
     }
 
     private void assertCounts(Long developerId, String organization, String client, String project, String softwareProduct) {

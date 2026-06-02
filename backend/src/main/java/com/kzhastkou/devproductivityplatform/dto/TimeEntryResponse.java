@@ -22,4 +22,6 @@ public class TimeEntryResponse {
     private Long developerId;
     private Long taskId;
     private String taskName;
+    private Long projectId;
+    private String projectName;
 }

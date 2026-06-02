@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -36,6 +37,16 @@ public class TaskController {
     @GetMapping("/my")
     public List<TaskResponse> getMyTasks() {
         return taskService.findMyTasks(resolveCurrentUserId());
+    }
+
+    @GetMapping("/active")
+    public List<TaskResponse> getActiveTasks(
+            @RequestParam(required = false) Long organizationId,
+            @RequestParam(required = false) Long clientId,
+            @RequestParam(required = false) Long projectId,
+            @RequestParam(required = false) Long includeTaskId
+    ) {
+        return taskService.findActiveTasks(resolveCurrentUserId(), organizationId, clientId, projectId, includeTaskId);
     }
 
     @GetMapping("/{id:\\d+}")

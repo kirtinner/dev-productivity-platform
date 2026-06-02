@@ -7,6 +7,7 @@ import { validateWorklogDay } from "../utils/timeTrackingValidation";
 import {
     createTimeEntry,
     deleteTimeEntry,
+    getActiveTasks,
     getClients,
     getVisibleClients,
     getProjects,
@@ -145,6 +146,24 @@ function getClientOptions(allClients, visibleClients, organizationId, currentCli
     return options;
 }
 
+function isClientSelectable(client, currentClientId = null) {
+    return !client.notDisplayed || sameId(client.id, currentClientId);
+}
+
+function mergeTasksById(currentTasks, nextTasks) {
+    const taskMap = new Map(currentTasks.map(task => [String(task.id), task]));
+
+    nextTasks.forEach(task => {
+        taskMap.set(String(task.id), task);
+    });
+
+    return Array.from(taskMap.values()).sort((left, right) => Number(left.id ?? 0) - Number(right.id ?? 0));
+}
+
+function isTaskSelectable(task, currentTaskId = null) {
+    return !task.completed || sameId(task.id, currentTaskId);
+}
+
 function WorklogEntryModal({
     mode,
     draftEntry,
@@ -168,12 +187,12 @@ function WorklogEntryModal({
             sameId(project.organizationId, draftEntry.organizationId)
             && sameId(project.clientId, draftEntry.clientId)
         );
-    const availableTasks = draftEntry.projectId == null
+    const availableTasks = draftEntry.clientId == null
         ? []
         : tasks.filter(task =>
-            sameId(task.projectId, draftEntry.projectId)
-            && sameId(task.clientId, draftEntry.clientId)
+            sameId(task.clientId, draftEntry.clientId)
             && sameId(task.organizationId, draftEntry.organizationId)
+            && (draftEntry.projectId == null || sameId(task.projectId, draftEntry.projectId))
         );
     const selectedProjectName = availableProjects.find(project => sameId(project.id, draftEntry.projectId))?.shortName
         ?? draftEntry.projectName
@@ -364,6 +383,7 @@ export default function TimeTrackingPage({
     const [apiErrorMessage, setApiErrorMessage] = useState("");
     const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
     const [pendingDeleteEntryId, setPendingDeleteEntryId] = useState(null);
+    const [deleteConfirmMessage, setDeleteConfirmMessage] = useState("Delete selected worklog entry?");
     const selectedDateRef = useRef(selectedDate);
     const cancelEntryEditRef = useRef(() => {});
 
@@ -456,6 +476,7 @@ export default function TimeTrackingPage({
         setValidationIssues([]);
         setDeleteConfirmOpen(false);
         setPendingDeleteEntryId(null);
+        setDeleteConfirmMessage("Delete selected worklog entry?");
     };
 
     const loadEntriesForDate = async (date) => {
@@ -563,13 +584,44 @@ export default function TimeTrackingPage({
         clearTransientMessages();
     };
 
-    const handleRowEditRequest = (entryId) => {
-        const targetEntry = entries.find(entry => entry.id === entryId);
-        if (!targetEntry) {
+    const loadTaskOptionsForEntry = async (entry) => {
+        const nextTasks = await getActiveTasks({
+            organizationId: entry.organizationId,
+            clientId: entry.clientId,
+            projectId: entry.projectId,
+            includeTaskId: entry.taskId
+        });
+
+        setTasks(currentTasks => mergeTasksById(currentTasks, nextTasks));
+        return nextTasks;
+    };
+
+    const handleRowEditRequest = async (entryId) => {
+        if (!entryId) {
+            setApiErrorMessage("Select a worklog entry before editing.");
             return;
         }
 
-        openEntryEditor("edit", targetEntry);
+        const targetEntry = entries.find(entry => entry.id === entryId);
+        if (!targetEntry) {
+            setApiErrorMessage("Selected worklog entry was not found.");
+            return;
+        }
+
+        try {
+            const nextTasks = await loadTaskOptionsForEntry(targetEntry);
+            const selectedTask = nextTasks.find(task => sameId(task.id, targetEntry.taskId));
+            const enrichedEntry = selectedTask ? {
+                ...targetEntry,
+                projectId: targetEntry.projectId ?? selectedTask.projectId,
+                projectName: targetEntry.projectName ?? getProjectLabel(projects.find(project => sameId(project.id, selectedTask.projectId)))
+            } : targetEntry;
+
+            openEntryEditor("edit", enrichedEntry);
+        } catch (error) {
+            setApiErrorMessage(getApiErrorMessage(error, "Unable to load task options for the selected worklog entry."));
+            return;
+        }
     };
 
     const handleDraftEntryChange = (field, value) => {
@@ -775,17 +827,23 @@ export default function TimeTrackingPage({
 
     const handleDeleteEntry = async (entryId) => {
         if (!entryId) {
+            setApiErrorMessage("Select a worklog entry before deleting.");
             return;
         }
 
         const entry = entries.find(currentEntry => sameId(currentEntry.id, entryId));
-        if (entry && isEarlierThanThreeWorkingDays(entry.date)) {
-            setPendingDeleteEntryId(entryId);
-            setDeleteConfirmOpen(true);
+        if (!entry) {
+            setApiErrorMessage("Selected worklog entry was not found.");
             return;
         }
 
-        await performDeleteEntry(entryId);
+        setPendingDeleteEntryId(entryId);
+        setDeleteConfirmMessage(
+            isEarlierThanThreeWorkingDays(entry.date)
+                ? "This entry is older than 3 working days. Delete selected worklog entry?"
+                : "Delete selected worklog entry?"
+        );
+        setDeleteConfirmOpen(true);
     };
 
     const handleCancelDeleteEntry = () => {
@@ -979,6 +1037,7 @@ export default function TimeTrackingPage({
                 (draftEntry.organizationId == null || sameId(task.organizationId, draftEntry.organizationId))
                 && (draftEntry.clientId == null || sameId(task.clientId, draftEntry.clientId))
                 && (draftEntry.projectId == null || sameId(task.projectId, draftEntry.projectId))
+                && isTaskSelectable(task, draftEntry.taskId)
             )
         )
         : tasks;
@@ -1125,7 +1184,7 @@ export default function TimeTrackingPage({
                         </div>
                         <div className="tracking-modal-body">
                             <p className="tracking-modal-text">
-                                This entry is older than 3 working days. Delete selected worklog entry?
+                                {deleteConfirmMessage}
                             </p>
                         </div>
                         <div className="tracking-modal-actions">

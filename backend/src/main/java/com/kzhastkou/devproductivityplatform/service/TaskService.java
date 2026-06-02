@@ -67,6 +67,28 @@ public class TaskService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
+    public List<TaskResponse> findActiveTasks(Long userId, Long organizationId, Long clientId, Long projectId, Long includeTaskId) {
+        Map<Long, Double> actualHoursByTaskId = loadActualHoursByTaskId(userId);
+        List<Task> activeTasks = findActiveTaskEntities(userId, organizationId, clientId, projectId);
+        Task includedTask = includeTaskId == null
+                ? null
+                : taskRepository.findByIdAndDeveloperId(includeTaskId, userId)
+                    .filter(task -> matchesTaskContext(task, organizationId, clientId, projectId))
+                    .orElse(null);
+
+        return java.util.stream.Stream.concat(
+                        activeTasks.stream(),
+                        includedTask == null ? java.util.stream.Stream.empty() : java.util.stream.Stream.of(includedTask)
+                )
+                .collect(Collectors.toMap(Task::getId, task -> task, (left, right) -> left))
+                .values()
+                .stream()
+                .sorted(Comparator.comparing(Task::getId))
+                .map(task -> toResponse(task, actualHoursByTaskId))
+                .toList();
+    }
+
     @Transactional
     public TaskResponse create(TaskRequest request, Long userId) {
         Developer developer = resolveDeveloper(userId);
@@ -167,6 +189,34 @@ public class TaskService {
         if (!project.getClient().getId().equals(client.getId())) {
             throw new RuntimeException("Project does not belong to the selected client");
         }
+    }
+
+    private List<Task> findActiveTaskEntities(Long userId, Long organizationId, Long clientId, Long projectId) {
+        if (projectId != null) {
+            return taskRepository.findByDeveloperIdAndProjectIdAndCompletedFalse(userId, projectId)
+                    .stream()
+                    .filter(task -> matchesTaskContext(task, organizationId, clientId, projectId))
+                    .toList();
+        }
+
+        if (clientId != null) {
+            return taskRepository.findByDeveloperIdAndClientIdAndCompletedFalse(userId, clientId)
+                    .stream()
+                    .filter(task -> matchesTaskContext(task, organizationId, clientId, null))
+                    .toList();
+        }
+
+        if (organizationId != null) {
+            return taskRepository.findByDeveloperIdAndOrganizationIdAndCompletedFalse(userId, organizationId);
+        }
+
+        return taskRepository.findByDeveloperIdAndCompletedFalse(userId);
+    }
+
+    private boolean matchesTaskContext(Task task, Long organizationId, Long clientId, Long projectId) {
+        return (organizationId == null || task.getOrganization().getId().equals(organizationId))
+                && (clientId == null || task.getClient().getId().equals(clientId))
+                && (projectId == null || task.getProject().getId().equals(projectId));
     }
 
     private Map<Long, Double> loadActualHoursByTaskId() {

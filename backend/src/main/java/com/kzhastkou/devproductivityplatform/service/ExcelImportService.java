@@ -61,39 +61,6 @@ import java.util.Set;
 @Slf4j
 public class ExcelImportService {
 
-    private static final List<String> REPLACED_DATA = List.of(
-            "Organizations",
-            "Clients",
-            "Projects",
-            "Software Products",
-            "Tasks",
-            "Time Entries"
-    );
-
-    private static final List<ExcelImportSheetSchema> SHEET_SCHEMAS = List.of(
-            sheet("Organizations",
-                    List.of("code", "short_name"),
-                    List.of("full_name")),
-            sheet("Clients",
-                    List.of("code", "organization_code", "short_name"),
-                    List.of("full_name", "not_displayed")),
-            sheet("Projects",
-                    List.of("code", "organization_code", "client_code", "short_name", "full_name"),
-                    List.of("description", "completed")),
-            sheet("SoftwareProducts",
-                    List.of("code", "short_name"),
-                    List.of("full_name")),
-            sheet("Tasks",
-                    List.of("code", "organization_code", "client_code", "project_code", "software_product_code", "task_number", "name"),
-                    List.of("comment", "description", "implementation_details", "estimated_hours", "completed", "task_link")),
-            sheet("TimeEntries",
-                    List.of("task_code", "entry_date", "hours"),
-                    List.of("comment"))
-    );
-
-    private static final Map<String, ExcelImportSheetSchema> SCHEMA_BY_SHEET = SHEET_SCHEMAS.stream()
-            .collect(LinkedHashMap::new, (map, schema) -> map.put(schema.getSheetName(), schema), LinkedHashMap::putAll);
-
     private final DeveloperRepository developerRepository;
     private final OrganizationRepository organizationRepository;
     private final ClientRepository clientRepository;
@@ -107,8 +74,8 @@ public class ExcelImportService {
     public ExcelImportSchemaResponse getSchema() {
         return ExcelImportSchemaResponse.builder()
                 .warning("Full data import will replace all current data for the current user account.")
-                .replacedData(REPLACED_DATA)
-                .sheets(SHEET_SCHEMAS)
+                .replacedData(FullDataExcelSchema.REPLACED_DATA)
+                .sheets(FullDataExcelSchema.SHEET_SCHEMAS)
                 .build();
     }
 
@@ -180,7 +147,7 @@ public class ExcelImportService {
     }
 
     private void validateSheetsAndColumns(Workbook workbook, ParsedWorkbook parsed) {
-        for (ExcelImportSheetSchema schema : SHEET_SCHEMAS) {
+        for (ExcelImportSheetSchema schema : FullDataExcelSchema.SHEET_SCHEMAS) {
             String sheetName = schema.getSheetName();
             Sheet sheet = workbook.getSheet(sheetName);
             if (sheet == null) {
@@ -297,7 +264,7 @@ public class ExcelImportService {
     }
 
     private void validateRequired(SheetRow row, ImportRow item, ParsedWorkbook parsed) {
-        for (String field : SCHEMA_BY_SHEET.get(item.sheet).getRequiredColumns()) {
+        for (String field : FullDataExcelSchema.SCHEMA_BY_SHEET.get(item.sheet).getRequiredColumns()) {
             if (isBlank(row.value(field))) {
                 item.valid = false;
                 parsed.addError(item.sheet, item.rowNumber, field, "Required field is empty.");
@@ -442,14 +409,6 @@ public class ExcelImportService {
                 parsed.addWarning("Tasks", row.rowNumber, "task_link", "Task link is not a valid URL.");
             }
         }
-    }
-
-    private static ExcelImportSheetSchema sheet(String sheetName, List<String> requiredColumns, List<String> optionalColumns) {
-        return ExcelImportSheetSchema.builder()
-                .sheetName(sheetName)
-                .requiredColumns(requiredColumns)
-                .optionalColumns(optionalColumns)
-                .build();
     }
 
     private ExcelImportCounts replaceUserData(Long developerId, ParsedWorkbook parsed) {

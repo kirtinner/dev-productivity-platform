@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { getImportSchema, importValidatedFile, validateImportFile } from "../services/administrationService";
+import { downloadFullDataExport, getImportSchema, importValidatedFile, validateImportFile } from "../services/administrationService";
 
 function getFileName(file) {
     return file?.name ?? "No file selected";
@@ -209,6 +209,7 @@ export default function AdministrationPage() {
     const [importSchemaError, setImportSchemaError] = useState("");
     const [message, setMessage] = useState("");
     const [busy, setBusy] = useState(false);
+    const [exportBusy, setExportBusy] = useState(false);
     const fileInputRef = useRef(null);
 
     const canExecuteImport = selectedFile
@@ -320,8 +321,29 @@ export default function AdministrationPage() {
         }
     };
 
+    const handleFullDataExport = async () => {
+        setExportBusy(true);
+        setMessage("");
+
+        try {
+            const result = await downloadFullDataExport();
+            const url = window.URL.createObjectURL(result.blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = result.fileName;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+        } catch (error) {
+            setMessage(getApiErrorMessage(error, "Unable to complete full data export."));
+        } finally {
+            setExportBusy(false);
+        }
+    };
+
     const confirmTitle = "Full Data Import";
-    const confirmButtonText = "Import All Data";
+    const confirmButtonText = "Full Data Import";
 
     return (
         <div className="tracking-main organizations-main administration-main">
@@ -385,13 +407,40 @@ export default function AdministrationPage() {
                                     onClick={handleImportData}
                                     disabled={!selectedFile || busy}
                                 >
-                                    Import All Data
+                                    Full Data Import
                                 </button>
                             </div>
 
                             {message ? (
                                 <div className="tracking-status-banner administration-status-banner">{message}</div>
                             ) : null}
+                        </div>
+                    </div>
+                </section>
+
+                <section className="tracking-panel organizations-panel">
+                    <div className="tracking-panel-header organizations-panel-header">
+                        <div>
+                            <h3>Full Data Export</h3>
+                        </div>
+                    </div>
+
+                    <div className="tracking-panel-body">
+                        <div className="administration-import-grid">
+                            <p className="tracking-modal-text">
+                                Download all current user data as an Excel file compatible with Full Data Import.
+                            </p>
+
+                            <div className="administration-import-actions">
+                                <button
+                                    type="button"
+                                    className="tracking-save-button"
+                                    onClick={handleFullDataExport}
+                                    disabled={exportBusy}
+                                >
+                                    Full Data Export
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </section>

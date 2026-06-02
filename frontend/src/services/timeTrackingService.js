@@ -8,6 +8,8 @@ function mapTimeEntry(entry) {
         organizationName: entry.organizationName ?? entry.organization?.shortName ?? entry.organization?.fullName ?? "",
         clientId: entry.clientId,
         clientName: entry.clientName ?? entry.client?.shortName ?? entry.client?.fullName ?? "",
+        projectId: entry.projectId ?? entry.task?.projectId ?? entry.task?.project?.id ?? null,
+        projectName: entry.projectName ?? entry.task?.projectName ?? entry.task?.project?.shortName ?? "",
         taskId: entry.taskId,
         taskName: entry.taskName ?? entry.task?.name ?? "",
         hours: entry.hours,
@@ -27,7 +29,8 @@ function mapTask(task) {
         clientName: task.clientName ?? task.client?.shortName ?? task.client?.fullName ?? "",
         organizationId: task.organizationId ?? null,
         projectId: task.projectId ?? null,
-        softwareProductId: task.softwareProductId ?? null
+        softwareProductId: task.softwareProductId ?? null,
+        completed: Boolean(task.completed)
     };
 }
 
@@ -58,12 +61,18 @@ let tasksRequestPromise = null;
 
 async function loadTasksResponse() {
     if (!tasksRequestPromise) {
-        tasksRequestPromise = api.get("/tasks/my").finally(() => {
+        tasksRequestPromise = api.get("/tasks/active").finally(() => {
             tasksRequestPromise = null;
         });
     }
 
     return tasksRequestPromise;
+}
+
+function compactTaskParams(params = {}) {
+    return Object.fromEntries(
+        Object.entries(params).filter(([, value]) => value != null && value !== "")
+    );
 }
 
 export async function getTimeEntriesByDate(date) {
@@ -133,5 +142,12 @@ export async function getProjects() {
 
 export async function getTasks() {
     const response = await loadTasksResponse();
+    return response.data.map(mapTask);
+}
+
+export async function getActiveTasks(params = {}) {
+    const response = await api.get("/tasks/active", {
+        params: compactTaskParams(params)
+    });
     return response.data.map(mapTask);
 }

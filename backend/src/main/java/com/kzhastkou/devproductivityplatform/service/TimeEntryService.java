@@ -236,6 +236,8 @@ public class TimeEntryService {
                 .developerId(entry.getDeveloper().getId())
                 .taskId(entry.getTask().getId())
                 .taskName(entry.getTask().getName())
+                .projectId(entry.getTask().getProject().getId())
+                .projectName(entry.getTask().getProject().getShortName())
                 .build();
     }
 }

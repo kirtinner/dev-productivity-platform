@@ -19,6 +19,14 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
 
     List<Task> findByDeveloperId(Long developerId);
 
+    List<Task> findByDeveloperIdAndCompletedFalse(Long developerId);
+
+    List<Task> findByDeveloperIdAndOrganizationIdAndCompletedFalse(Long developerId, Long organizationId);
+
+    List<Task> findByDeveloperIdAndClientIdAndCompletedFalse(Long developerId, Long clientId);
+
+    List<Task> findByDeveloperIdAndProjectIdAndCompletedFalse(Long developerId, Long projectId);
+
     List<Task> findByDeveloperIdAndOrganizationId(Long developerId, Long organizationId);
 
     List<Task> findByDeveloperIdAndClientId(Long developerId, Long clientId);

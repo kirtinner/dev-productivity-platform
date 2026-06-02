@@ -32,6 +32,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/reports", "/api/reports/**").hasAnyRole("USER", "ADMIN")
                         .requestMatchers("/api/administration", "/api/administration/**").hasAnyRole("USER", "ADMIN")
                         .requestMatchers("/api/import", "/api/import/**").hasAnyRole("USER", "ADMIN")
+                        .requestMatchers("/api/export", "/api/export/**").hasAnyRole("USER", "ADMIN")
                         .requestMatchers("/api/users", "/api/users/**").hasAnyRole("USER", "ADMIN")
                         .anyRequest().authenticated()
                 )
