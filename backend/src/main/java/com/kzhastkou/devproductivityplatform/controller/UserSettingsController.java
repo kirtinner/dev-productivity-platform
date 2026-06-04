@@ -1,5 +1,8 @@
 package com.kzhastkou.devproductivityplatform.controller;
 
+import com.kzhastkou.devproductivityplatform.dto.FolderValidationRequest;
+import com.kzhastkou.devproductivityplatform.dto.FolderValidationResponse;
+import com.kzhastkou.devproductivityplatform.dto.ScheduledExportRunResponse;
 import com.kzhastkou.devproductivityplatform.dto.UserSettingsRequest;
 import com.kzhastkou.devproductivityplatform.dto.UserSettingsResponse;
 import com.kzhastkou.devproductivityplatform.service.UserSettingsService;
@@ -9,6 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -39,6 +43,20 @@ public class UserSettingsController {
                 request.getDailyHoursLimit()
         );
         return userSettingsService.updateForUser(userId, request);
+    }
+
+    @PostMapping("/scheduled-export/run-now")
+    public ScheduledExportRunResponse runScheduledExportNow() {
+        Long userId = resolveCurrentUserId();
+        log.info("POST /api/user-settings/scheduled-export/run-now resolved userId={}", userId);
+        return userSettingsService.runScheduledExportNow(userId);
+    }
+
+    @PostMapping("/folders/validate")
+    public FolderValidationResponse validateFolder(@RequestBody FolderValidationRequest request) {
+        Long userId = resolveCurrentUserId();
+        log.info("POST /api/user-settings/folders/validate resolved userId={}", userId);
+        return userSettingsService.validateFolder(request.getPath());
     }
 
     private Long resolveCurrentUserId() {

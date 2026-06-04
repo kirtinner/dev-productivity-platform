@@ -164,6 +164,19 @@ function isTaskSelectable(task, currentTaskId = null) {
     return !task.completed || sameId(task.id, currentTaskId);
 }
 
+function isProjectSelectable(project, currentProjectId = null) {
+    return !project.completed || sameId(project.id, currentProjectId);
+}
+
+function taskProjectIsSelectable(task, projects, currentTaskId = null, currentProjectId = null) {
+    if (sameId(task.id, currentTaskId)) {
+        return true;
+    }
+
+    const taskProject = projects.find(project => sameId(project.id, task.projectId));
+    return taskProject ? isProjectSelectable(taskProject, currentProjectId) : false;
+}
+
 function WorklogEntryModal({
     mode,
     draftEntry,
@@ -186,6 +199,7 @@ function WorklogEntryModal({
         : projects.filter(project =>
             sameId(project.organizationId, draftEntry.organizationId)
             && sameId(project.clientId, draftEntry.clientId)
+            && isProjectSelectable(project, draftEntry.projectId)
         );
     const availableTasks = draftEntry.clientId == null
         ? []
@@ -193,6 +207,7 @@ function WorklogEntryModal({
             sameId(task.clientId, draftEntry.clientId)
             && sameId(task.organizationId, draftEntry.organizationId)
             && (draftEntry.projectId == null || sameId(task.projectId, draftEntry.projectId))
+            && taskProjectIsSelectable(task, projects, draftEntry.taskId, draftEntry.projectId)
         );
     const selectedProjectName = availableProjects.find(project => sameId(project.id, draftEntry.projectId))?.shortName
         ?? draftEntry.projectName
@@ -664,13 +679,15 @@ export default function TimeTrackingPage({
                 const keepProject = keepClient
                     && currentProject
                     && sameId(currentProject.organizationId, organizationId)
-                    && sameId(currentProject.clientId, current.clientId);
+                    && sameId(currentProject.clientId, current.clientId)
+                    && isProjectSelectable(currentProject, current.projectId);
                 const currentTask = tasks.find(task => sameId(task.id, current.taskId));
                 const keepTask = keepProject
                     && currentTask
                     && sameId(currentTask.organizationId, organizationId)
                     && sameId(currentTask.clientId, current.clientId)
-                    && sameId(currentTask.projectId, current.projectId);
+                    && sameId(currentTask.projectId, current.projectId)
+                    && isTaskSelectable(currentTask, current.taskId);
 
                 return {
                     ...current,
@@ -744,7 +761,9 @@ export default function TimeTrackingPage({
                 }
 
                 const currentTask = tasks.find(task => sameId(task.id, current.taskId));
-                const keepTask = currentTask && sameId(currentTask.projectId, selectedProject?.id);
+                const keepTask = currentTask
+                    && sameId(currentTask.projectId, selectedProject?.id)
+                    && isTaskSelectable(currentTask, current.taskId);
 
                 return {
                     ...current,
@@ -771,13 +790,14 @@ export default function TimeTrackingPage({
 
             const taskId = toOptionalNumber(value);
             const selectedTask = entryTasks.find(task => sameId(task.id, taskId));
+            const selectedProject = projects.find(project => sameId(project.id, selectedTask?.projectId));
 
             setDraftEntry(current => (current ? {
                 ...current,
                 organizationId: selectedTask?.organizationId ?? current.organizationId,
                 clientId: selectedTask?.clientId ?? current.clientId,
                 projectId: selectedTask?.projectId ?? current.projectId,
-                projectName: getProjectLabel(projects.find(project => sameId(project.id, selectedTask?.projectId))),
+                projectName: getProjectLabel(selectedProject),
                 taskId: selectedTask?.id ?? null,
                 taskName: selectedTask?.name ?? ""
             } : current));
@@ -1023,11 +1043,9 @@ export default function TimeTrackingPage({
         : [];
     const entryProjects = draftEntry
         ? projects.filter(project =>
-            sameId(project.id, draftEntry.projectId)
-            || (
-                (draftEntry.organizationId == null || sameId(project.organizationId, draftEntry.organizationId))
-                && (draftEntry.clientId == null || sameId(project.clientId, draftEntry.clientId))
-            )
+            (draftEntry.organizationId == null || sameId(project.organizationId, draftEntry.organizationId))
+            && (draftEntry.clientId == null || sameId(project.clientId, draftEntry.clientId))
+            && isProjectSelectable(project, draftEntry.projectId)
         )
         : projects;
     const entryTasks = draftEntry
@@ -1038,6 +1056,7 @@ export default function TimeTrackingPage({
                 && (draftEntry.clientId == null || sameId(task.clientId, draftEntry.clientId))
                 && (draftEntry.projectId == null || sameId(task.projectId, draftEntry.projectId))
                 && isTaskSelectable(task, draftEntry.taskId)
+                && taskProjectIsSelectable(task, projects, draftEntry.taskId, draftEntry.projectId)
             )
         )
         : tasks;

@@ -1,5 +1,3 @@
-import { getStoredReportsSaveDirectoryHandle } from "./reportExportDirectoryStorage";
-
 const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 const REPORTS_SAVE_PICKER_ID = "reports-export";
 const REPORTS_SAVE_DIALOG_USED_KEY = "dev-productivity:reports-export-dialog-used";
@@ -338,8 +336,6 @@ function downloadBlob(blob, fileName) {
 export async function exportWorkEffortReportToXlsx(reportData) {
     const blob = createZipFile(buildWorkbookFiles(reportData));
     const fileName = `work-effort-report-${reportData.from ?? "period"}-to-${reportData.to ?? "period"}.xlsx`;
-    const directoryHandle = await getStoredReportsSaveDirectoryHandle();
-    const hasManualSaveHistory = localStorage.getItem(REPORTS_SAVE_DIALOG_USED_KEY) === "true";
 
     if (window.showSaveFilePicker) {
         const pickerOptions = {
@@ -355,10 +351,6 @@ export async function exportWorkEffortReportToXlsx(reportData) {
             ]
         };
 
-        if (directoryHandle && !hasManualSaveHistory) {
-            pickerOptions.startIn = directoryHandle;
-        }
-
         try {
             const fileHandle = await window.showSaveFilePicker(pickerOptions);
             const writable = await fileHandle.createWritable();
@@ -369,24 +361,6 @@ export async function exportWorkEffortReportToXlsx(reportData) {
         } catch (error) {
             if (error?.name === "AbortError") {
                 return;
-            }
-
-            if (error?.name === "TypeError" && pickerOptions.startIn) {
-                try {
-                    const retryOptions = { ...pickerOptions };
-                    delete retryOptions.startIn;
-                    const fileHandle = await window.showSaveFilePicker(retryOptions);
-                    const writable = await fileHandle.createWritable();
-                    await writable.write(blob);
-                    await writable.close();
-                    localStorage.setItem(REPORTS_SAVE_DIALOG_USED_KEY, "true");
-                    return;
-                } catch (retryError) {
-                    if (retryError?.name === "AbortError") {
-                        return;
-                    }
-                    throw retryError;
-                }
             }
 
             throw error;

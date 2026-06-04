@@ -3,6 +3,7 @@ package com.kzhastkou.devproductivityplatform.service;
 import com.kzhastkou.devproductivityplatform.config.FullDataExportProperties;
 import com.kzhastkou.devproductivityplatform.dto.ExcelImportSheetSchema;
 import com.kzhastkou.devproductivityplatform.dto.FullDataExportFile;
+import com.kzhastkou.devproductivityplatform.dto.FullDataExportSavedFile;
 import com.kzhastkou.devproductivityplatform.entity.Client;
 import com.kzhastkou.devproductivityplatform.entity.Organization;
 import com.kzhastkou.devproductivityplatform.entity.Project;
@@ -50,6 +51,7 @@ public class FullDataExportService {
     private final TaskRepository taskRepository;
     private final TimeEntryRepository timeEntryRepository;
     private final FullDataExportProperties properties;
+    private final FolderValidationService folderValidationService;
 
     @Transactional(readOnly = true)
     public FullDataExportFile exportForDownload(Long developerId) {
@@ -58,21 +60,47 @@ public class FullDataExportService {
 
     @Transactional(readOnly = true)
     public Path exportToConfiguredDirectory(Long developerId) {
+        return exportToFolder(developerId, properties.getExportDir()).path();
+    }
+
+    @Transactional(readOnly = true, noRollbackFor = Exception.class)
+    public FullDataExportSavedFile exportToFolder(Long developerId, String folder) {
         FullDataExportFile file = createExportFile(developerId, LocalDateTime.now());
-        return saveToDirectory(file, Path.of(properties.getExportDir()));
+        Path exportDir = folderValidationService.validateFolderOrThrow(folder);
+        Path savedFile = saveToDirectory(developerId, file, exportDir);
+        try {
+            long sizeBytes = Files.size(savedFile);
+            log.info(
+                    "Export file created: developerId={}, scheduled_export_folder={}, resolvedAbsolutePath={}, generatedFileName={}, finalFullFilePath={}, existsAfterWrite={}, sizeBytes={}",
+                    developerId,
+                    folder,
+                    exportDir,
+                    file.fileName(),
+                    savedFile,
+                    Files.exists(savedFile),
+                    sizeBytes
+            );
+            return new FullDataExportSavedFile(savedFile, sizeBytes);
+        } catch (IOException error) {
+            throw new RuntimeException("Unable to verify full data export file: " + error.getMessage(), error);
+        }
     }
 
     public void cleanupOldExports() {
-        if (properties.getRetentionDays() <= 0) {
+        cleanupOldExports(properties.getExportDir(), properties.getRetentionDays());
+    }
+
+    public void cleanupOldExports(String folder, int retentionDays) {
+        if (retentionDays <= 0) {
             return;
         }
 
-        Path exportDir = Path.of(properties.getExportDir());
+        Path exportDir = Path.of(folder);
         if (!Files.isDirectory(exportDir)) {
             return;
         }
 
-        LocalDateTime threshold = LocalDateTime.now().minusDays(properties.getRetentionDays());
+        LocalDateTime threshold = LocalDateTime.now().minusDays(retentionDays);
         try (var files = Files.list(exportDir)) {
             files
                     .filter(Files::isRegularFile)
@@ -129,14 +157,33 @@ public class FullDataExportService {
         }
     }
 
-    private Path saveToDirectory(FullDataExportFile file, Path exportDir) {
+    private Path saveToDirectory(Long developerId, FullDataExportFile file, Path exportDir) {
         try {
             Files.createDirectories(exportDir);
             Path target = exportDir.resolve(file.fileName());
+            log.info(
+                    "Saving Full Data Export: developerId={}, resolvedAbsolutePath={}, generatedFileName={}, finalFullFilePath={}",
+                    developerId,
+                    exportDir,
+                    file.fileName(),
+                    target
+            );
             Files.write(target, file.content());
+            long sizeBytes = Files.size(target);
+            boolean exists = Files.exists(target);
+            log.info(
+                    "Full Data Export save verification: developerId={}, finalFullFilePath={}, existsAfterWrite={}, sizeBytes={}",
+                    developerId,
+                    target,
+                    exists,
+                    sizeBytes
+            );
+            if (!exists || sizeBytes <= 0) {
+                throw new RuntimeException("Full data export file was not written or is empty.");
+            }
             return target;
         } catch (IOException error) {
-            throw new RuntimeException("Unable to save full data export file.", error);
+            throw new RuntimeException("Unable to save full data export file: " + error.getMessage(), error);
         }
     }
 
@@ -313,7 +360,7 @@ public class FullDataExportService {
     private void deleteQuietly(Path path) {
         try {
             Files.deleteIfExists(path);
-            log.info("Deleted old Full Data Export file: fileName={}", path.getFileName());
+            log.info("Old export file deleted: fileName={}", path.getFileName());
         } catch (IOException error) {
             log.warn("Unable to delete old Full Data Export file: fileName={}, error={}", path.getFileName(), error.getMessage());
         }

@@ -15,6 +15,7 @@ import { getOrganizations } from "./services/organizationsService";
 import { getSoftwareProducts } from "./services/softwareProductsService";
 import {
     getUserSettings,
+    runScheduledFullDataExportNow,
     updateUserSettings as apiUpdateUserSettings
 } from "./services/userSettingsService";
 
@@ -141,12 +142,25 @@ function App() {
         const savedSettings = await apiUpdateUserSettings({
             currentOrganizationId: nextSettings.currentOrganizationId,
             dailyHoursLimit: nextSettings.dailyHoursLimit,
-            reportsSaveDirectory: nextSettings.reportsSaveDirectory
+            reportsSaveDirectory: nextSettings.reportsSaveDirectory,
+            scheduledExportEnabled: nextSettings.scheduledExportEnabled,
+            scheduledExportFolder: nextSettings.scheduledExportFolder,
+            scheduledExportTime: nextSettings.scheduledExportTime,
+            scheduledExportRetentionDays: nextSettings.scheduledExportRetentionDays
         });
 
         setUserSettings(savedSettings);
         setUserSettingsError("");
         return savedSettings;
+    };
+
+    const handleRunScheduledExportNow = async () => {
+        const result = await runScheduledFullDataExportNow();
+        if (result.settings) {
+            setUserSettings(result.settings);
+            setUserSettingsError("");
+        }
+        return result;
     };
 
     const handleSoftwareProductsChange = (nextSoftwareProducts) => {
@@ -220,7 +234,11 @@ function App() {
                             await handleUserSettingsChange({
                                 currentOrganizationId: nextCurrentOrganizationId,
                                 dailyHoursLimit: userSettings.dailyHoursLimit,
-                                reportsSaveDirectory: userSettings.reportsSaveDirectory
+                                reportsSaveDirectory: userSettings.reportsSaveDirectory,
+                                scheduledExportEnabled: userSettings.scheduledExportEnabled,
+                                scheduledExportFolder: userSettings.scheduledExportFolder,
+                                scheduledExportTime: userSettings.scheduledExportTime,
+                                scheduledExportRetentionDays: userSettings.scheduledExportRetentionDays
                             });
                         }}
                     />
@@ -233,6 +251,10 @@ function App() {
                             userSettings.currentOrganizationId ?? "no-org",
                             userSettings.dailyHoursLimit ?? "no-limit",
                             userSettings.reportsSaveDirectory ?? "no-reports-dir",
+                            userSettings.scheduledExportEnabled ? "scheduled-on" : "scheduled-off",
+                            userSettings.scheduledExportFolder ?? "no-scheduled-dir",
+                            userSettings.scheduledExportTime ?? "no-scheduled-time",
+                            userSettings.scheduledExportRetentionDays ?? "no-retention",
                             softwareProducts.map(product => product.id).join("-")
                         ].join(":")}
                         organizations={organizations}
@@ -243,6 +265,7 @@ function App() {
                         softwareProductsLoading={softwareProductsLoading}
                         softwareProductsError={softwareProductsError}
                         onUserSettingsChange={handleUserSettingsChange}
+                        onRunScheduledExportNow={handleRunScheduledExportNow}
                         onSoftwareProductsChange={handleSoftwareProductsChange}
                     />
                 );

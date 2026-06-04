@@ -2,6 +2,8 @@ package com.kzhastkou.devproductivityplatform.service;
 
 import com.kzhastkou.devproductivityplatform.dto.ExcelImportResult;
 import com.kzhastkou.devproductivityplatform.dto.FullDataExportFile;
+import com.kzhastkou.devproductivityplatform.dto.ScheduledExportRunResponse;
+import com.kzhastkou.devproductivityplatform.dto.UserSettingsRequest;
 import com.kzhastkou.devproductivityplatform.entity.Developer;
 import com.kzhastkou.devproductivityplatform.entity.Role;
 import com.kzhastkou.devproductivityplatform.repository.ClientRepository;
@@ -19,6 +21,7 @@ import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.mock.web.MockMultipartFile;
@@ -26,11 +29,16 @@ import org.springframework.mock.web.MockMultipartFile;
 import java.io.ByteArrayOutputStream;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.attribute.FileTime;
 import java.time.LocalDate;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @SpringBootTest
 class ExcelImportServiceIntegrationTest {
@@ -39,6 +47,8 @@ class ExcelImportServiceIntegrationTest {
     private ExcelImportService excelImportService;
     @Autowired
     private FullDataExportService fullDataExportService;
+    @Autowired
+    private UserSettingsService userSettingsService;
     @Autowired
     private DeveloperRepository developerRepository;
     @Autowired
@@ -58,6 +68,9 @@ class ExcelImportServiceIntegrationTest {
 
     private final List<Long> developerIds = new ArrayList<>();
 
+    @TempDir
+    private Path tempDir;
+
     @AfterEach
     void cleanup() {
         for (Long developerId : developerIds) {
@@ -65,6 +78,7 @@ class ExcelImportServiceIntegrationTest {
                 userSettingsRepository.findByDeveloperId(developerId).ifPresent(settings -> {
                     settings.setCurrentOrganization(null);
                     userSettingsRepository.save(settings);
+                    userSettingsRepository.delete(settings);
                 });
                 developer.setOrganization(null);
                 developerRepository.saveAndFlush(developer);
@@ -107,6 +121,113 @@ class ExcelImportServiceIntegrationTest {
         ExcelImportResult repeatedImport = excelImportService.importData(workbookFile("B"), developer.getId());
         assertThat(repeatedImport.isImported()).isTrue();
         assertCounts(developer.getId(), "Org B", "Client B", "Project B", "Product B");
+    }
+
+    @Test
+    void runScheduledExportNowCreatesFileAndUpdatesUserSettings() {
+        Developer developer = developerRepository.saveAndFlush(Developer.builder()
+                .email("scheduled-export-now-" + System.nanoTime() + "@example.test")
+                .password("test")
+                .role(Role.USER)
+                .build());
+        developerIds.add(developer.getId());
+
+        UserSettingsRequest request = new UserSettingsRequest();
+        request.setDailyHoursLimit(8.0);
+        request.setReportsSaveDirectory(tempDir.toString());
+        request.setScheduledExportEnabled(true);
+        request.setScheduledExportFolder(tempDir.toString());
+        request.setScheduledExportTime("02:00");
+        request.setScheduledExportRetentionDays(30);
+        userSettingsService.updateForUser(developer.getId(), request);
+
+        ScheduledExportRunResponse result = userSettingsService.runScheduledExportNow(developer.getId());
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getFileName()).startsWith("dev_platform_full_export_").endsWith(".xlsx");
+        assertThat(Files.exists(Path.of(result.getFilePath()))).isTrue();
+        assertThat(result.getSettings().getScheduledExportLastRunAt()).isNotNull();
+        assertThat(result.getSettings().getScheduledExportLastSuccessAt()).isNotNull();
+        assertThat(result.getSettings().getScheduledExportLastErrorMessage()).isBlank();
+    }
+
+    @Test
+    void saveUserSettingsRejectsRelativeExportFolder() {
+        Developer developer = developerRepository.saveAndFlush(Developer.builder()
+                .email("scheduled-export-relative-" + System.nanoTime() + "@example.test")
+                .password("test")
+                .role(Role.USER)
+                .build());
+        developerIds.add(developer.getId());
+
+        UserSettingsRequest request = new UserSettingsRequest();
+        request.setDailyHoursLimit(8.0);
+        request.setReportsSaveDirectory(tempDir.toString());
+        request.setScheduledExportEnabled(true);
+        request.setScheduledExportFolder("DevProductivityBackups");
+        request.setScheduledExportTime("02:00");
+        request.setScheduledExportRetentionDays(30);
+
+        assertThatThrownBy(() -> userSettingsService.updateForUser(developer.getId(), request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Export Folder must be an absolute path.");
+        assertThat(Files.exists(Path.of("DevProductivityBackups"))).isFalse();
+    }
+
+    @Test
+    void saveUserSettingsRejectsRelativeReportsSaveDirectoryWithoutOverwritingSavedSettings() {
+        Developer developer = developerRepository.saveAndFlush(Developer.builder()
+                .email("reports-directory-relative-" + System.nanoTime() + "@example.test")
+                .password("test")
+                .role(Role.USER)
+                .build());
+        developerIds.add(developer.getId());
+
+        UserSettingsRequest validRequest = new UserSettingsRequest();
+        validRequest.setDailyHoursLimit(8.0);
+        validRequest.setReportsSaveDirectory(tempDir.toString());
+        validRequest.setScheduledExportEnabled(false);
+        validRequest.setScheduledExportFolder("");
+        validRequest.setScheduledExportTime("02:00");
+        validRequest.setScheduledExportRetentionDays(30);
+        userSettingsService.updateForUser(developer.getId(), validRequest);
+
+        UserSettingsRequest invalidRequest = new UserSettingsRequest();
+        invalidRequest.setDailyHoursLimit(7.0);
+        invalidRequest.setReportsSaveDirectory("33333");
+        invalidRequest.setScheduledExportEnabled(false);
+        invalidRequest.setScheduledExportFolder("");
+        invalidRequest.setScheduledExportTime("02:00");
+        invalidRequest.setScheduledExportRetentionDays(30);
+
+        assertThatThrownBy(() -> userSettingsService.updateForUser(developer.getId(), invalidRequest))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Reports Save Directory must be an absolute path.");
+
+        assertThat(userSettingsService.getForUser(developer.getId()))
+                .satisfies(settings -> {
+                    assertThat(settings.getReportsSaveDirectory()).isEqualTo(tempDir.toString());
+                    assertThat(settings.getDailyHoursLimit()).isEqualTo(8.0);
+                });
+    }
+
+    @Test
+    void cleanupOldExportsDeletesOnlyMatchingOldExportFiles() throws IOException {
+        Path oldExport = tempDir.resolve("dev_platform_full_export_2026-01-01_02-00.xlsx");
+        Path newExport = tempDir.resolve("dev_platform_full_export_2026-06-01_02-00.xlsx");
+        Path unrelated = tempDir.resolve("notes.xlsx");
+        Files.writeString(oldExport, "old");
+        Files.writeString(newExport, "new");
+        Files.writeString(unrelated, "keep");
+        Files.setLastModifiedTime(oldExport, FileTime.from(Instant.now().minusSeconds(3 * 24 * 60 * 60)));
+        Files.setLastModifiedTime(newExport, FileTime.from(Instant.now()));
+        Files.setLastModifiedTime(unrelated, FileTime.from(Instant.now().minusSeconds(3 * 24 * 60 * 60)));
+
+        fullDataExportService.cleanupOldExports(tempDir.toString(), 1);
+
+        assertThat(Files.exists(oldExport)).isFalse();
+        assertThat(Files.exists(newExport)).isTrue();
+        assertThat(Files.exists(unrelated)).isTrue();
     }
 
     @Test

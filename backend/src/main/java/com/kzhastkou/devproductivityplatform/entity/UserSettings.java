@@ -16,6 +16,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.time.LocalDateTime;
+
 @Entity
 @Table(name = "user_settings")
 @Getter
@@ -42,4 +44,23 @@ public class UserSettings {
 
     @Column(length = 1000)
     private String reportsSaveDirectory;
+
+    @Column
+    private Boolean scheduledExportEnabled;
+
+    @Column(columnDefinition = "TEXT")
+    private String scheduledExportFolder;
+
+    @Column(length = 5)
+    private String scheduledExportTime;
+
+    @Column
+    private Integer scheduledExportRetentionDays;
+
+    private LocalDateTime scheduledExportLastRunAt;
+
+    private LocalDateTime scheduledExportLastSuccessAt;
+
+    @Column(columnDefinition = "TEXT")
+    private String scheduledExportLastErrorMessage;
 }

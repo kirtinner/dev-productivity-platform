@@ -20,6 +20,7 @@ public class DatabaseSequenceInitializer {
         allowEmptyDeveloperOrganization();
         convertLongTextColumns();
         addClientVisibilityColumn();
+        addScheduledExportSettingsColumns();
         backfillDeveloperOwnership();
         synchronizeSequence("organizations_id_seq", "organizations");
         synchronizeSequence("clients_id_seq", "clients");
@@ -68,6 +69,68 @@ public class DatabaseSequenceInitializer {
         entityManager.createNativeQuery("""
                 ALTER TABLE IF EXISTS clients
                 ALTER COLUMN not_displayed SET NOT NULL
+                """).executeUpdate();
+    }
+
+    private void addScheduledExportSettingsColumns() {
+        entityManager.createNativeQuery("""
+                ALTER TABLE IF EXISTS user_settings
+                ADD COLUMN IF NOT EXISTS scheduled_export_enabled boolean
+                """).executeUpdate();
+        entityManager.createNativeQuery("""
+                ALTER TABLE IF EXISTS user_settings
+                ADD COLUMN IF NOT EXISTS scheduled_export_folder text
+                """).executeUpdate();
+        entityManager.createNativeQuery("""
+                ALTER TABLE IF EXISTS user_settings
+                ADD COLUMN IF NOT EXISTS scheduled_export_time varchar(5)
+                """).executeUpdate();
+        entityManager.createNativeQuery("""
+                ALTER TABLE IF EXISTS user_settings
+                ADD COLUMN IF NOT EXISTS scheduled_export_retention_days integer
+                """).executeUpdate();
+        entityManager.createNativeQuery("""
+                ALTER TABLE IF EXISTS user_settings
+                ADD COLUMN IF NOT EXISTS scheduled_export_last_run_at timestamp
+                """).executeUpdate();
+        entityManager.createNativeQuery("""
+                ALTER TABLE IF EXISTS user_settings
+                ADD COLUMN IF NOT EXISTS scheduled_export_last_success_at timestamp
+                """).executeUpdate();
+        entityManager.createNativeQuery("""
+                ALTER TABLE IF EXISTS user_settings
+                ADD COLUMN IF NOT EXISTS scheduled_export_last_error_message text
+                """).executeUpdate();
+        entityManager.createNativeQuery("""
+                UPDATE user_settings
+                SET scheduled_export_enabled = false
+                WHERE scheduled_export_enabled IS NULL
+                """).executeUpdate();
+        entityManager.createNativeQuery("""
+                UPDATE user_settings
+                SET scheduled_export_time = '02:00'
+                WHERE scheduled_export_time IS NULL OR scheduled_export_time = ''
+                """).executeUpdate();
+        entityManager.createNativeQuery("""
+                UPDATE user_settings
+                SET scheduled_export_retention_days = 30
+                WHERE scheduled_export_retention_days IS NULL
+                """).executeUpdate();
+        entityManager.createNativeQuery("""
+                ALTER TABLE IF EXISTS user_settings
+                ALTER COLUMN scheduled_export_enabled SET DEFAULT false
+                """).executeUpdate();
+        entityManager.createNativeQuery("""
+                ALTER TABLE IF EXISTS user_settings
+                ALTER COLUMN scheduled_export_enabled SET NOT NULL
+                """).executeUpdate();
+        entityManager.createNativeQuery("""
+                ALTER TABLE IF EXISTS user_settings
+                ALTER COLUMN scheduled_export_retention_days SET DEFAULT 30
+                """).executeUpdate();
+        entityManager.createNativeQuery("""
+                ALTER TABLE IF EXISTS user_settings
+                ALTER COLUMN scheduled_export_retention_days SET NOT NULL
                 """).executeUpdate();
     }
 

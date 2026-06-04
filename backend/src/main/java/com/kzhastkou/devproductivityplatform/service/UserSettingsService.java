@@ -1,5 +1,8 @@
 package com.kzhastkou.devproductivityplatform.service;
 
+import com.kzhastkou.devproductivityplatform.dto.ScheduledExportRunResponse;
+import com.kzhastkou.devproductivityplatform.dto.FullDataExportSavedFile;
+import com.kzhastkou.devproductivityplatform.dto.FolderValidationResponse;
 import com.kzhastkou.devproductivityplatform.dto.UserSettingsRequest;
 import com.kzhastkou.devproductivityplatform.dto.UserSettingsResponse;
 import com.kzhastkou.devproductivityplatform.entity.Developer;
@@ -13,15 +16,24 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+
 @Service
 @RequiredArgsConstructor
+@lombok.extern.slf4j.Slf4j
 public class UserSettingsService {
 
     private static final double DEFAULT_DAILY_HOURS_LIMIT = 8.0;
+    private static final String DEFAULT_SCHEDULED_EXPORT_TIME = "02:00";
+    private static final int DEFAULT_SCHEDULED_EXPORT_RETENTION_DAYS = 30;
 
     private final UserSettingsRepository userSettingsRepository;
     private final DeveloperRepository developerRepository;
     private final OrganizationRepository organizationRepository;
+    private final FullDataExportService fullDataExportService;
+    private final FolderValidationService folderValidationService;
 
     @Transactional
     public UserSettingsResponse getForUser(Long developerId) {
@@ -35,12 +47,71 @@ public class UserSettingsService {
                 ? resolveOrganization(request.getCurrentOrganizationId(), developer.getId())
                 : null;
         UserSettings settings = getOrCreateSettings(developer);
+        validateSettingsFolders(request);
 
         settings.setCurrentOrganization(organization);
         settings.setDailyHoursLimit(request.getDailyHoursLimit());
         settings.setReportsSaveDirectory(request.getReportsSaveDirectory());
+        settings.setScheduledExportEnabled(Boolean.TRUE.equals(request.getScheduledExportEnabled()));
+        settings.setScheduledExportFolder(normalizeText(request.getScheduledExportFolder()));
+        settings.setScheduledExportTime(normalizeScheduledExportTime(request.getScheduledExportTime()));
+        settings.setScheduledExportRetentionDays(normalizeRetentionDays(request.getScheduledExportRetentionDays()));
 
-        return toResponse(userSettingsRepository.save(settings));
+        UserSettings savedSettings = userSettingsRepository.save(settings);
+        log.info("Settings saved: developerId={}, scheduledExportEnabled={}", developerId, savedSettings.getScheduledExportEnabled());
+        return toResponse(savedSettings);
+    }
+
+    @Transactional
+    public ScheduledExportRunResponse runScheduledExportNow(Long developerId) {
+        UserSettings settings = getOrCreateSettings(resolveDeveloper(developerId));
+        log.info("Run Export Now executed: developerId={}", developerId);
+        return executeScheduledExport(settings);
+    }
+
+    public FolderValidationResponse validateFolder(String folder) {
+        return folderValidationService.validateFolder(folder);
+    }
+
+    @Transactional
+    public void runDueScheduledExports(LocalDateTime now) {
+        LocalTime currentMinute = now.toLocalTime().withSecond(0).withNano(0);
+        LocalDate today = now.toLocalDate();
+
+        for (UserSettings settings : userSettingsRepository.findByScheduledExportEnabledTrue()) {
+            if (settings.getDeveloper() == null) {
+                continue;
+            }
+
+            Long developerId = settings.getDeveloper().getId();
+            String scheduledTime = normalizeScheduledExportTime(settings.getScheduledExportTime());
+            LocalTime scheduledLocalTime;
+            try {
+                scheduledLocalTime = LocalTime.parse(scheduledTime);
+            } catch (Exception error) {
+                settings.setScheduledExportLastErrorMessage("Invalid scheduled export time.");
+                userSettingsRepository.save(settings);
+                log.error("Scheduled Full Data Export failed: developerId={}, error={}", developerId, "Invalid scheduled export time.");
+                continue;
+            }
+
+            if (!currentMinute.equals(scheduledLocalTime)) {
+                continue;
+            }
+
+            LocalDateTime lastRunAt = settings.getScheduledExportLastRunAt();
+            if (lastRunAt != null && lastRunAt.toLocalDate().equals(today)) {
+                continue;
+            }
+
+            log.info("Scheduled Full Data Export started: developerId={}", developerId);
+            ScheduledExportRunResponse result = executeScheduledExport(settings);
+            if (result.isSuccess()) {
+                log.info("Scheduled Full Data Export finished: developerId={}, fileName={}", developerId, result.getFileName());
+            } else {
+                log.error("Scheduled Full Data Export failed: developerId={}, error={}", developerId, result.getMessage());
+            }
+        }
     }
 
     private UserSettings getOrCreateSettings(Developer developer) {
@@ -50,7 +121,61 @@ public class UserSettingsService {
                         .currentOrganization(resolveDefaultOrganization(developer))
                         .dailyHoursLimit(DEFAULT_DAILY_HOURS_LIMIT)
                         .reportsSaveDirectory("")
+                        .scheduledExportEnabled(false)
+                        .scheduledExportFolder("")
+                        .scheduledExportTime(DEFAULT_SCHEDULED_EXPORT_TIME)
+                        .scheduledExportRetentionDays(DEFAULT_SCHEDULED_EXPORT_RETENTION_DAYS)
                         .build()));
+    }
+
+    private ScheduledExportRunResponse executeScheduledExport(UserSettings settings) {
+        LocalDateTime runStartedAt = LocalDateTime.now();
+        settings.setScheduledExportLastRunAt(runStartedAt);
+        userSettingsRepository.saveAndFlush(settings);
+
+        try {
+            String folder = normalizeText(settings.getScheduledExportFolder());
+            if (folder.isBlank()) {
+                throw new IllegalArgumentException("Export Folder is required.");
+            }
+
+            Long developerId = settings.getDeveloper().getId();
+            FullDataExportSavedFile file = fullDataExportService.exportToFolder(developerId, folder);
+            fullDataExportService.cleanupOldExports(folder, normalizeRetentionDays(settings.getScheduledExportRetentionDays()));
+
+            settings.setScheduledExportLastSuccessAt(LocalDateTime.now());
+            settings.setScheduledExportLastErrorMessage("");
+            UserSettings savedSettings = userSettingsRepository.save(settings);
+            log.info(
+                    "Run Export Now verification completed: developerId={}, scheduled_export_folder={}, finalFullFilePath={}, sizeBytes={}",
+                    developerId,
+                    folder,
+                    file.path(),
+                    file.sizeBytes()
+            );
+
+            return ScheduledExportRunResponse.builder()
+                    .success(true)
+                    .message("Export completed successfully.")
+                    .fileName(file.path().getFileName().toString())
+                    .filePath(file.path().toString())
+                    .fileSizeBytes(file.sizeBytes())
+                    .settings(toResponse(savedSettings))
+                    .build();
+        } catch (Exception error) {
+            String message = error.getMessage() == null || error.getMessage().isBlank()
+                    ? "Scheduled Full Data Export failed."
+                    : error.getMessage();
+            settings.setScheduledExportLastErrorMessage(message);
+            UserSettings savedSettings = userSettingsRepository.save(settings);
+
+            return ScheduledExportRunResponse.builder()
+                    .success(false)
+                    .message(message)
+                    .technicalDetails(error.getClass().getSimpleName() + ": " + message)
+                    .settings(toResponse(savedSettings))
+                    .build();
+        }
     }
 
     private Developer resolveDeveloper(Long developerId) {
@@ -75,6 +200,36 @@ public class UserSettingsService {
                 .orElse(null);
     }
 
+    private void validateSettingsFolders(UserSettingsRequest request) {
+        validateOptionalFolder("Reports Save Directory", request.getReportsSaveDirectory());
+
+        String exportFolder = normalizeText(request.getScheduledExportFolder());
+        if (Boolean.TRUE.equals(request.getScheduledExportEnabled()) && exportFolder.isBlank()) {
+            throw new IllegalArgumentException("Export Folder is required.");
+        }
+
+        validateOptionalFolder("Export Folder", exportFolder);
+    }
+
+    private void validateOptionalFolder(String fieldLabel, String folder) {
+        String normalizedFolder = normalizeText(folder);
+        if (normalizedFolder.isBlank()) {
+            return;
+        }
+
+        try {
+            folderValidationService.validateFolderOrThrow(normalizedFolder);
+        } catch (Exception error) {
+            String validationMessage = error.getMessage() == null || error.getMessage().isBlank()
+                    ? "Folder validation failed."
+                    : error.getMessage();
+            if ("Path is not absolute.".equals(validationMessage)) {
+                throw new IllegalArgumentException(fieldLabel + " must be an absolute path.", error);
+            }
+            throw new IllegalArgumentException(fieldLabel + " is not a valid writable folder. " + validationMessage, error);
+        }
+    }
+
     private UserSettingsResponse toResponse(UserSettings settings) {
         Organization currentOrganization = settings.getCurrentOrganization();
 
@@ -85,6 +240,26 @@ public class UserSettingsService {
                 .currentOrganizationName(currentOrganization != null ? currentOrganization.getShortName() : "")
                 .dailyHoursLimit(settings.getDailyHoursLimit())
                 .reportsSaveDirectory(settings.getReportsSaveDirectory())
+                .scheduledExportEnabled(Boolean.TRUE.equals(settings.getScheduledExportEnabled()))
+                .scheduledExportFolder(settings.getScheduledExportFolder() == null ? "" : settings.getScheduledExportFolder())
+                .scheduledExportTime(normalizeScheduledExportTime(settings.getScheduledExportTime()))
+                .scheduledExportRetentionDays(normalizeRetentionDays(settings.getScheduledExportRetentionDays()))
+                .scheduledExportLastRunAt(settings.getScheduledExportLastRunAt())
+                .scheduledExportLastSuccessAt(settings.getScheduledExportLastSuccessAt())
+                .scheduledExportLastErrorMessage(settings.getScheduledExportLastErrorMessage() == null ? "" : settings.getScheduledExportLastErrorMessage())
                 .build();
+    }
+
+    private String normalizeText(String value) {
+        return value == null ? "" : value.trim();
+    }
+
+    private String normalizeScheduledExportTime(String value) {
+        String normalized = normalizeText(value);
+        return normalized.isBlank() ? DEFAULT_SCHEDULED_EXPORT_TIME : normalized;
+    }
+
+    private int normalizeRetentionDays(Integer value) {
+        return value == null || value < 0 ? DEFAULT_SCHEDULED_EXPORT_RETENTION_DAYS : value;
     }
 }

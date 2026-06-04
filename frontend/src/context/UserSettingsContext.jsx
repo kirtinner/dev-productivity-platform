@@ -6,7 +6,14 @@ export const DEFAULT_USER_SETTINGS = {
     currentOrganizationId: null,
     currentOrganizationName: "",
     dailyHoursLimit: 8,
-    reportsSaveDirectory: ""
+    reportsSaveDirectory: "",
+    scheduledExportEnabled: false,
+    scheduledExportFolder: "",
+    scheduledExportTime: "02:00",
+    scheduledExportRetentionDays: 30,
+    scheduledExportLastRunAt: null,
+    scheduledExportLastSuccessAt: null,
+    scheduledExportLastErrorMessage: ""
 };
 
 export const UserSettingsContext = createContext({

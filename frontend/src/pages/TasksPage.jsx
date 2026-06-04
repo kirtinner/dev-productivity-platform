@@ -122,6 +122,10 @@ function resolveProjectLabel(projects, projectId) {
     return project?.shortName ?? project?.fullName ?? "";
 }
 
+function isProjectSelectable(project, currentProjectId = null) {
+    return !project.completed || sameId(project.id, currentProjectId);
+}
+
 function shouldHighlightActualHours(actualHours, estimatedHours) {
     const actual = Number(actualHours);
     const estimated = Number(estimatedHours);
@@ -638,7 +642,7 @@ export default function TasksPage({
         closeTransientDialogs();
     }, [closeTransientDialogs]);
 
-    const getProjectsForContext = (organizationId, clientId, sourceProjects = projects) => {
+    const getProjectsForContext = (organizationId, clientId, sourceProjects = projects, currentProjectId = null) => {
         if (organizationId == null || clientId == null) {
             return [];
         }
@@ -646,11 +650,23 @@ export default function TasksPage({
         return sourceProjects.filter(project =>
             sameId(project.organizationId, organizationId)
             && sameId(project.clientId, clientId)
+            && isProjectSelectable(project, currentProjectId)
         );
     };
 
-    const resolveProjectSelection = (organizationId, clientId, currentProjectId = null, sourceProjects = projects) => {
-        const contextProjects = getProjectsForContext(organizationId, clientId, sourceProjects);
+    const resolveProjectSelection = (
+        organizationId,
+        clientId,
+        currentProjectId = null,
+        sourceProjects = projects,
+        includeCurrentCompleted = false
+    ) => {
+        const contextProjects = getProjectsForContext(
+            organizationId,
+            clientId,
+            sourceProjects,
+            includeCurrentCompleted ? currentProjectId : null
+        );
         if (contextProjects.length === 0) {
             return null;
         }
@@ -659,9 +675,8 @@ export default function TasksPage({
             return currentProjectId;
         }
 
-        const openProjects = contextProjects.filter(project => !project.completed);
-        if (openProjects.length === 1) {
-            return openProjects[0].id;
+        if (contextProjects.length === 1) {
+            return contextProjects[0].id;
         }
 
         return null;
@@ -851,7 +866,13 @@ export default function TasksPage({
         const nextClientId = nextClients.some(client => sameId(client.id, draftTask.clientId))
             ? draftTask.clientId
             : null;
-        const nextProjectId = resolveProjectSelection(parsedOrganizationId, nextClientId, draftTask.projectId);
+        const nextProjectId = resolveProjectSelection(
+            parsedOrganizationId,
+            nextClientId,
+            draftTask.projectId,
+            projects,
+            draftTask.id != null
+        );
         setDraftTask(current => (current ? {
             ...current,
             organizationId: parsedOrganizationId,
@@ -878,7 +899,9 @@ export default function TasksPage({
         const nextProjectId = resolveProjectSelection(
             draftTask.organizationId,
             parsedClientId,
-            draftTask.projectId
+            draftTask.projectId,
+            projects,
+            draftTask.id != null
         );
 
         setDraftTask(current => (current ? {
@@ -1171,7 +1194,7 @@ export default function TasksPage({
             : getClientOptions(clients, visibleClients, draftTask.organizationId, draftTask.clientId)
         : [];
     const editorProjects = draftTask
-        ? getProjectsForContext(draftTask.organizationId, draftTask.clientId)
+        ? getProjectsForContext(draftTask.organizationId, draftTask.clientId, projects, draftTask.id != null ? draftTask.projectId : null)
         : [];
 
     useEffect(() => {
