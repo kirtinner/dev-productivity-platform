@@ -19,7 +19,6 @@ export default function Dashboard({onLogout, onNavigate}) {
     useEffect(() => {
         api.get("/time-entries/my").then(res => setEntries(res.data));
         api.get("/tasks/my").then(res => {
-            console.log("TASKS:", res.data);
             setTasks(res.data);
         });
     }, []);

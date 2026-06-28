@@ -109,14 +109,12 @@ function toTimeEntryRequest(entry) {
 
 export async function createTimeEntry(entry) {
     const payload = toTimeEntryRequest(entry);
-    console.log("[timeTrackingService] POST /time-entries payload", payload);
     const response = await api.post("/time-entries", payload);
     return mapTimeEntry(response.data);
 }
 
 export async function updateTimeEntry(id, entry) {
     const payload = toTimeEntryRequest(entry);
-    console.log(`[timeTrackingService] PUT /time-entries/${id} payload`, payload);
     const response = await api.put(`/time-entries/${id}`, payload);
     return mapTimeEntry(response.data);
 }

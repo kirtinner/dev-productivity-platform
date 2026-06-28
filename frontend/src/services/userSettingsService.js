@@ -31,16 +31,12 @@ function toUserSettingsRequest(settings) {
 }
 
 export async function getUserSettings() {
-    console.log("[userSettingsService] GET /api/user-settings");
     const response = await api.get("/user-settings");
-    console.log("[userSettingsService] GET /api/user-settings response", response.status, response.data);
     return normalizeUserSettings(response.data);
 }
 
 export async function updateUserSettings(payload) {
-    console.log("[userSettingsService] PUT /api/user-settings", toUserSettingsRequest(payload));
     const response = await api.put("/user-settings", toUserSettingsRequest(payload));
-    console.log("[userSettingsService] PUT /api/user-settings response", response.status, response.data);
     return normalizeUserSettings(response.data);
 }
 

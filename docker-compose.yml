@@ -1,16 +1,26 @@
+# Local development Docker Compose configuration.
+# Not intended as a production deployment template.
+#
+# Production deployments must provide their own environment variables:
+# - DATABASE_URL
+# - DATABASE_USERNAME
+# - DATABASE_PASSWORD
+# - JWT_SECRET
+# - CORS_ALLOWED_ORIGINS
+
 services:
   postgres:
     image: postgres:17-alpine
     environment:
-      POSTGRES_DB: dev_platform
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ${POSTGRES_DB:-dev_platform}
+      POSTGRES_USER: ${DATABASE_USERNAME:-postgres}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-postgres}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d dev_platform"]
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -22,9 +32,13 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/dev_platform
-      SPRING_DATASOURCE_USERNAME: postgres
-      SPRING_DATASOURCE_PASSWORD: postgres
+      # Keep Compose explicitly local/dev. The dev profile enables local defaults and demo data.
+      SPRING_PROFILES_ACTIVE: dev
+      DATABASE_URL: ${DATABASE_URL:-jdbc:postgresql://postgres:5432/dev_platform}
+      DATABASE_USERNAME: ${DATABASE_USERNAME:-postgres}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:-postgres}
+      JWT_SECRET: ${JWT_SECRET:-my-super-secret-key-my-super-secret-key}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost}
     ports:
       - "8080:8080"
 

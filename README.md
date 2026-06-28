@@ -1,17 +1,13 @@
-# Worklog Manager
+# Dev Productivity Platform
 
 ![Java](https://img.shields.io/badge/Java-21-blue)
 ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.x-brightgreen)
 ![React](https://img.shields.io/badge/React-19-61dafb)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ed)
 
-## Project Overview
+Dev Productivity Platform is an enterprise-style full-stack productivity application for software developers and small teams.
 
-Worklog Manager is a full-stack productivity and time tracking application for software developers and small teams.
-
-It provides a practical workspace for managing organizations, clients, projects, tasks, daily worklog entries, and effort reports. The project also includes Excel-based import/export workflows, scheduled export configuration, JWT-based authentication, and Docker Compose support for running the full local stack.
-
-The application is built as a Spring Boot REST API, a React/Vite frontend, and a PostgreSQL database. It is intended as an enterprise-style pet project that demonstrates common full-stack application patterns without adding unnecessary infrastructure complexity.
+It provides a practical workspace for organizations, clients, projects, tasks, daily time tracking, reports, Excel import/export, account settings, and application metadata. The project is built as a Spring Boot REST API, a React/Vite frontend, and a PostgreSQL database.
 
 ## Screenshots
 
@@ -33,45 +29,15 @@ The application is built as a Spring Boot REST API, a React/Vite frontend, and a
 
 ## Features
 
-### Organizations Management
-
-Create, edit, select, and delete organizations used as the top-level scope for clients, projects, tasks, and worklog entries.
-
-### Clients Management
-
-Manage clients within organizations, including visibility settings used by the worklog and task management workflows.
-
-### Projects Management
-
-Create and maintain projects linked to organizations and clients. Projects can be marked as completed and filtered in the UI.
-
-### Tasks Management
-
-Manage development tasks with project, client, organization, software product, estimates, completion status, task links, and comments. Task details include related worklog entries.
-
-### Time Tracking
-
-Track daily worklog entries by organization, client, task, date, hours, and comments. The UI includes daily and monthly summaries.
-
-### Reports
-
-Generate work effort reports for selected date ranges and review totals grouped by client and task.
-
-### Full Data Import
-
-Import full application data from Excel files using the administration page. The application validates import files before applying data.
-
-### Full Data Export
-
-Export full application data to Excel for backup or migration purposes.
-
-### Scheduled Full Data Export
-
-Configure scheduled full data exports, including export folder, run time, retention period, and manual run-now execution.
-
-### Docker Deployment
-
-Run PostgreSQL, the Spring Boot backend, and the React/Vite frontend served through Nginx using Docker Compose.
+- JWT authentication with Sign In and Sign Up.
+- BCrypt password storage and account password change.
+- Multi-user data isolation across organizations, clients, projects, tasks, time entries, settings, reports, and import/export.
+- Organizations, Clients, Projects, Tasks, Software Products, Settings, Administration, Reports, and About pages.
+- Daily time tracking with worklog entries and monthly summaries.
+- Work effort reports grouped by client and task.
+- Full Excel import/export for user-owned data.
+- Scheduled full data export configuration.
+- Docker support for local development.
 
 ## Technology Stack
 
@@ -81,8 +47,9 @@ Run PostgreSQL, the Spring Boot backend, and the React/Vite frontend served thro
 - Spring Boot
 - Spring Security
 - JWT Authentication
-- Spring Data JPA
+- Spring Data JPA / Hibernate
 - PostgreSQL
+- Apache POI
 
 ### Frontend
 
@@ -100,12 +67,9 @@ Run PostgreSQL, the Spring Boot backend, and the React/Vite frontend served thro
 
 ```text
 Browser
-  ↓
-Nginx / React UI
-  ↓
-Spring Boot REST API
-  ↓
-PostgreSQL
+  -> Nginx / React UI
+  -> Spring Boot REST API
+  -> PostgreSQL
 ```
 
 ## Quick Start
@@ -115,7 +79,9 @@ PostgreSQL
 - Docker
 - Docker Compose
 
-### Run The Application
+### Run Locally With Docker Compose
+
+`docker-compose.yml` is a local development configuration, not a production deployment template.
 
 From the project root:
 
@@ -129,14 +95,7 @@ Open the application:
 http://localhost
 ```
 
-The first startup on an empty database creates a demo user and sample data automatically.
-
-## Demo Login
-
-```text
-Email: example@gmail.com
-Password: 123
-```
+Create a user through the Sign Up form, then use the application normally.
 
 ## Services
 
@@ -148,43 +107,6 @@ Docker Compose starts three services:
 
 The frontend proxies `/api/` requests to the backend service through Nginx.
 
-## Configuration
-
-The backend uses local development defaults from `backend/src/main/resources/application.yml`.
-
-For Docker Compose, datasource settings are provided through environment variables:
-
-```yaml
-SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/dev_platform
-SPRING_DATASOURCE_USERNAME=postgres
-SPRING_DATASOURCE_PASSWORD=postgres
-```
-
-JWT tokens are signed with the `JWT_SECRET` environment variable. If it is not provided, the application uses a demo default suitable for local development:
-
-```yaml
-JWT_SECRET=my-super-secret-key-my-super-secret-key
-```
-
-For non-demo deployments, set a strong custom `JWT_SECRET`.
-
-## Security Notes
-
-- `JWT_SECRET` can be provided through an environment variable.
-- If `JWT_SECRET` is not set, the backend falls back to the demo default from `application.yml`.
-- The default JWT secret is suitable only for local/demo usage.
-- Do not publish real `.env` files, database dumps, Excel exports, backup files, or local machine paths.
-
-## Project Structure
-
-```text
-.
-+-- backend/              # Java Spring Boot backend
-+-- frontend/             # React + Vite frontend
-+-- docker-compose.yml    # PostgreSQL, backend, frontend stack
-+-- README.md
-```
-
 ## Local Development
 
 ### Backend
@@ -195,7 +117,9 @@ mvn test
 mvn spring-boot:run
 ```
 
-By default, the backend expects PostgreSQL at:
+By default, the backend uses the `dev` profile. The dev profile keeps local defaults convenient, including `ddl-auto=update`, SQL logging, and a local JWT fallback secret.
+
+The default local database URL is:
 
 ```text
 jdbc:postgresql://localhost:5432/dev_platform
@@ -211,9 +135,29 @@ npm run dev
 
 The Vite dev server proxies `/api` requests to `http://localhost:8080`.
 
+## Production Environment Variables
+
+Set these variables for any non-dev deployment:
+
+```text
+DATABASE_URL=jdbc:postgresql://<host>:<port>/<database>
+DATABASE_USERNAME=<database-user>
+DATABASE_PASSWORD=<database-password>
+JWT_SECRET=<strong-random-secret-at-least-32-characters>
+CORS_ALLOWED_ORIGINS=https://your-frontend-domain.example
+```
+
+Production notes:
+
+- Do not run production with the `dev` profile.
+- `JWT_SECRET` is required outside the `dev` profile.
+- The demo/local JWT secret is rejected outside the `dev` profile.
+- Production defaults disable SQL logging and do not use `ddl-auto=update`.
+- Do not publish real `.env` files, database dumps, Excel exports, backup files, or local machine paths.
+
 ## Useful Commands
 
-Build and start all services:
+Build and start all local services:
 
 ```bash
 docker compose up -d --build
@@ -237,19 +181,29 @@ Stop services:
 docker compose down
 ```
 
-Stop services and remove the database volume:
+Stop services and remove the local database volume:
 
 ```bash
 docker compose down -v
 ```
 
+## Project Structure
+
+```text
+.
++-- backend/              # Java Spring Boot backend
++-- frontend/             # React + Vite frontend
++-- docker-compose.yml    # Local PostgreSQL, backend, frontend stack
++-- README.md
+```
+
 ## Future Improvements
 
-- Multi-user support
-- Cloud backup
-- Advanced reporting
-- Notifications
-- More granular roles and permissions
+- Email verification.
+- Forgot password flow.
+- More granular roles and permissions.
+- Database migrations with Flyway or Liquibase.
+- Additional automated security and API tests.
 
 ## License
 

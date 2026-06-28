@@ -41,7 +41,7 @@ public class AuthService {
         Developer dev = developerRepository.findByEmail(normalizeEmail(request.getEmail()))
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        if (!passwordMatches(request.getPassword(), dev.getPassword())) {
+        if (!passwordEncoder.matches(request.getPassword(), dev.getPassword())) {
             throw new RuntimeException("Invalid password");
         }
 
@@ -174,15 +174,4 @@ public class AuthService {
         return value == null || value.trim().isEmpty();
     }
 
-    private boolean passwordMatches(String rawPassword, String storedPassword) {
-        if (storedPassword == null) {
-            return false;
-        }
-
-        if (storedPassword.startsWith("$2a$") || storedPassword.startsWith("$2b$") || storedPassword.startsWith("$2y$")) {
-            return passwordEncoder.matches(rawPassword, storedPassword);
-        }
-
-        return storedPassword.equals(rawPassword);
-    }
 }

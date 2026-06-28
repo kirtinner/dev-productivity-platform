@@ -1,6 +1,8 @@
 spring:
   application:
     name: dev-productivity-platform
+  profiles:
+    default: dev
 
   datasource:
     url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/dev_platform}
@@ -9,22 +11,22 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: update
-    show-sql: true
+      ddl-auto: validate
+    show-sql: false
     properties:
       hibernate:
-        format_sql: true
+        format_sql: false
 
 server:
   port: 8080
 
 jwt:
-  secret: ${JWT_SECRET:my-super-secret-key-my-super-secret-key}
+  secret: ${JWT_SECRET:}
 
 logging:
   level:
-    org.springframework.dao: DEBUG
-    org.hibernate.engine.jdbc.spi.SqlExceptionHelper: DEBUG
+    org.springframework.dao: INFO
+    org.hibernate.engine.jdbc.spi.SqlExceptionHelper: WARN
     org.springframework.web: INFO
 
 app:
@@ -42,3 +44,25 @@ app:
       cron: "0 0 2 * * *"
       export-dir: ""
       retention-days: 30
+
+---
+spring:
+  config:
+    activate:
+      on-profile: dev
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+jwt:
+  secret: ${JWT_SECRET:my-super-secret-key-my-super-secret-key}
+
+logging:
+  level:
+    org.springframework.dao: DEBUG
+    org.hibernate.engine.jdbc.spi.SqlExceptionHelper: DEBUG
+    org.springframework.web: INFO
