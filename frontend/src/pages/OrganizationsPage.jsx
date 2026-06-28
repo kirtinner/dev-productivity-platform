@@ -28,7 +28,11 @@ function validateOrganization(organization) {
     return issues;
 }
 
-export default function OrganizationsPage({ currentOrganizationId = null, onCurrentOrganizationChange = async () => {} }) {
+export default function OrganizationsPage({
+    currentOrganizationId = null,
+    onCurrentOrganizationChange = async () => {},
+    onOrganizationsChange = () => {}
+}) {
     const [organizations, setOrganizations] = useState([]);
     const [selectedOrganizationId, setSelectedOrganizationId] = useState(null);
     const [editorOpen, setEditorOpen] = useState(false);
@@ -148,6 +152,7 @@ export default function OrganizationsPage({ currentOrganizationId = null, onCurr
             const nextOrganizations = organizations.filter(organization => organization.id !== organizationId);
 
             setOrganizations(nextOrganizations);
+            onOrganizationsChange(nextOrganizations);
             setSelectedOrganizationId(nextOrganizations[0]?.id ?? null);
             if (String(currentOrganizationId) === String(organizationId)) {
                 await onCurrentOrganizationChange(nextOrganizations[0]?.id ?? null);
@@ -201,6 +206,7 @@ export default function OrganizationsPage({ currentOrganizationId = null, onCurr
                 );
 
             setOrganizations(nextOrganizations);
+            onOrganizationsChange(nextOrganizations);
             setSelectedOrganizationId(normalizedOrganization.id);
             if (draftOrganizationIsCurrent) {
                 await onCurrentOrganizationChange(normalizedOrganization.id);
@@ -244,6 +250,7 @@ export default function OrganizationsPage({ currentOrganizationId = null, onCurr
                 }
 
                 setOrganizations(nextOrganizations);
+                onOrganizationsChange(nextOrganizations);
                 setSelectedOrganizationId(nextOrganizations[0]?.id ?? null);
             } catch {
                 if (!active) {

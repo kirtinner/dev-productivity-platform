@@ -2,13 +2,15 @@ import { useState } from "react";
 import api from "../api/api";
 
 export default function LoginPage({ onLogin }) {
+    const [mode, setMode] = useState("login");
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [errorMessage, setErrorMessage] = useState("");
     const [submitting, setSubmitting] = useState(false);
     const canSubmit = email.trim() !== "" && password !== "" && !submitting;
+    const isSignUp = mode === "register";
 
-    const handleLogin = async (event) => {
+    const handleSubmit = async (event) => {
         event.preventDefault();
         if (!canSubmit) {
             return;
@@ -18,8 +20,8 @@ export default function LoginPage({ onLogin }) {
         setSubmitting(true);
 
         try {
-            const res = await api.post("/auth/login", {
-                email,
+            const res = await api.post(isSignUp ? "/auth/register" : "/auth/login", {
+                email: email.trim(),
                 password
             });
 
@@ -33,11 +35,20 @@ export default function LoginPage({ onLogin }) {
                 error?.response?.data?.message ??
                 error?.response?.data?.error ??
                 error?.message ??
-                "Login failed."
+                (isSignUp ? "Sign up failed." : "Login failed.")
             );
         } finally {
             setSubmitting(false);
         }
+    };
+
+    const handleModeChange = (nextMode) => {
+        if (submitting || mode === nextMode) {
+            return;
+        }
+
+        setMode(nextMode);
+        setErrorMessage("");
     };
 
     return (
@@ -47,18 +58,37 @@ export default function LoginPage({ onLogin }) {
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="login-title"
-                onSubmit={handleLogin}
+                onSubmit={handleSubmit}
             >
                 <div className="tracking-modal-header">
-                    <h3 id="login-title">Sign In</h3>
+                    <h3 id="login-title">{isSignUp ? "Sign Up" : "Sign In"}</h3>
                 </div>
 
                 <div className="tracking-modal-body">
+                    <div className="login-mode-switch" role="group" aria-label="Authentication mode">
+                        <button
+                            type="button"
+                            className={mode === "login" ? "login-mode-switch-active" : ""}
+                            onClick={() => handleModeChange("login")}
+                            disabled={submitting}
+                        >
+                            Sign In
+                        </button>
+                        <button
+                            type="button"
+                            className={mode === "register" ? "login-mode-switch-active" : ""}
+                            onClick={() => handleModeChange("register")}
+                            disabled={submitting}
+                        >
+                            Sign Up
+                        </button>
+                    </div>
+
                     <div className="tracking-modal-fields">
                         <label className="tracking-modal-field">
-                            <span>User Name</span>
+                            <span>Email</span>
                             <input
-                                type="text"
+                                type="email"
                                 autoComplete="username"
                                 autoFocus
                                 value={email}
@@ -71,7 +101,7 @@ export default function LoginPage({ onLogin }) {
                             <span>Password</span>
                             <input
                                 type="password"
-                                autoComplete="current-password"
+                                autoComplete={isSignUp ? "new-password" : "current-password"}
                                 value={password}
                                 onChange={event => setPassword(event.target.value)}
                                 disabled={submitting}
@@ -86,7 +116,7 @@ export default function LoginPage({ onLogin }) {
 
                 <div className="tracking-modal-actions">
                     <button type="submit" className="tracking-modal-button" disabled={!canSubmit}>
-                        Sign In
+                        {isSignUp ? "Create Account" : "Sign In"}
                     </button>
                 </div>
             </form>

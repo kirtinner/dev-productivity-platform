@@ -260,6 +260,40 @@ textarea:focus {
   margin-top: 12px;
 }
 
+.login-mode-switch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  margin-bottom: 14px;
+  border: 1px solid #d8dde6;
+  border-radius: 6px;
+  background: #eef1f5;
+}
+
+.login-mode-switch button {
+  min-height: 32px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #4c5565;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.login-mode-switch button:hover:not(:disabled),
+.login-mode-switch-active {
+  background: #ffffff;
+  color: #1f2937;
+  box-shadow: 0 1px 2px rgba(31, 41, 55, 0.08);
+}
+
+.login-mode-switch button:disabled {
+  cursor: default;
+  opacity: 0.72;
+}
+
 .login-empty-workspace {
   width: 100%;
   height: 100%;

@@ -195,6 +195,10 @@ function App() {
         setSoftwareProductsError("");
     };
 
+    const handleOrganizationsChange = (nextOrganizations) => {
+        setOrganizations(nextOrganizations);
+    };
+
     const navigateToPage = (nextPage) => {
         if (!VALID_PAGES.has(nextPage)) {
             return;
@@ -257,6 +261,7 @@ function App() {
                 return (
                     <OrganizationsPage
                         currentOrganizationId={currentOrganizationId}
+                        onOrganizationsChange={handleOrganizationsChange}
                         onCurrentOrganizationChange={async nextCurrentOrganizationId => {
                             await handleGeneralUserSettingsChange({
                                 currentOrganizationId: nextCurrentOrganizationId,
