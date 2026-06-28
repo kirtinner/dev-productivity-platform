@@ -244,6 +244,103 @@ textarea:focus {
   font-size: 12px;
 }
 
+.app-form-field,
+.tracking-modal-field,
+.settings-directory-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--app-text-default);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.app-form-label,
+.tracking-modal-editor .tracking-modal-field > span,
+.tracking-modal-worklog-editor .tracking-modal-field > span,
+.tracking-modal-task-editor .tracking-modal-field > span {
+  color: var(--app-text-default);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.app-form-input,
+.app-form-select,
+.app-form-textarea,
+.tracking-modal-input,
+.tracking-modal-textarea,
+.tracking-modal-field input,
+.tracking-modal-field select,
+.tracking-modal-field textarea,
+.settings-directory-control input {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--app-control-border);
+  border-radius: 6px;
+  background: var(--app-panel-bg);
+  color: var(--app-text-primary);
+  font: inherit;
+  font-weight: 400;
+  line-height: 1.35;
+  box-sizing: border-box;
+  transition: background-color 180ms ease, color 180ms ease, border-color 180ms ease;
+}
+
+.app-form-input:focus,
+.app-form-select:focus,
+.app-form-textarea:focus,
+.tracking-modal-input:focus,
+.tracking-modal-textarea:focus,
+.tracking-modal-field input:focus,
+.tracking-modal-field select:focus,
+.tracking-modal-field textarea:focus,
+.settings-directory-control input:focus {
+  border-color: var(--app-selection-border);
+  outline: 2px solid var(--app-focus-ring);
+  outline-offset: 1px;
+}
+
+.app-form-input:disabled,
+.app-form-select:disabled,
+.app-form-textarea:disabled,
+.tracking-modal-input:disabled,
+.tracking-modal-textarea:disabled,
+.tracking-modal-field input:disabled,
+.tracking-modal-field select:disabled,
+.tracking-modal-field textarea:disabled,
+.settings-directory-control input:disabled {
+  background: var(--app-surface-bg);
+  color: var(--app-text-muted);
+  cursor: not-allowed;
+}
+
+.app-checkbox-field,
+.tracking-modal-checkbox-control,
+.settings-inline-checkbox-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--app-text-muted);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.25;
+}
+
+.app-checkbox-field input,
+.tracking-modal-checkbox-control input,
+.settings-inline-checkbox-control input {
+  flex: 0 0 auto;
+  margin: 0;
+}
+
+.app-form-error,
+.tracking-modal-error,
+.login-modal-error {
+  color: var(--app-error-text);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
 .actions {
   display: flex;
   gap: 10px;
@@ -441,9 +538,9 @@ textarea:focus {
   gap: 4px;
   padding: 4px;
   margin-bottom: 14px;
-  border: 1px solid #d8dde6;
+  border: 1px solid var(--app-control-border);
   border-radius: 6px;
-  background: #eef1f5;
+  background: var(--app-page-bg);
 }
 
 .login-mode-switch button {
@@ -451,7 +548,7 @@ textarea:focus {
   border: 0;
   border-radius: 4px;
   background: transparent;
-  color: #4c5565;
+  color: var(--app-text-muted);
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
@@ -459,8 +556,8 @@ textarea:focus {
 }
 
 .login-mode-switch button:not(.login-mode-switch-active):hover:not(:disabled) {
-  background: #eef7ff;
-  color: #1f2937;
+  background: var(--app-selection-bg);
+  color: var(--app-text-primary);
   box-shadow: 0 1px 2px rgba(31, 41, 55, 0.08);
   cursor: pointer;
 }
@@ -479,7 +576,7 @@ textarea:focus {
 .login-empty-workspace {
   width: 100%;
   height: 100%;
-  background: #eef1f5;
+  background: var(--app-page-bg);
 }
 
 .app-shell-main {
@@ -491,7 +588,7 @@ textarea:focus {
   align-self: stretch;
   box-sizing: border-box;
   overflow: hidden;
-  background: #eef1f5;
+  background: var(--app-page-bg);
 }
 
 .app-placeholder-page {
@@ -1025,7 +1122,7 @@ textarea:focus {
 .settings-subsection {
   margin-top: 18px;
   padding-top: 16px;
-  border-top: 1px solid var(--tracking-border);
+  border-top: 1px solid var(--app-control-border);
 }
 
 .settings-subsection-header {
@@ -1040,7 +1137,7 @@ textarea:focus {
   margin: 0;
   font-size: 14px;
   font-weight: 700;
-  color: var(--tracking-text);
+  color: var(--app-text-default);
 }
 
 .settings-checkbox-field {
@@ -1051,7 +1148,7 @@ textarea:focus {
 .settings-inline-checkbox-control {
   min-height: 34px;
   padding: 0;
-  color: var(--tracking-muted);
+  color: var(--app-text-muted);
   font-size: 12px;
   font-weight: 400;
   line-height: 1.25;
@@ -1077,12 +1174,12 @@ textarea:focus {
   display: grid;
   gap: 6px;
   margin-top: 12px;
-  color: var(--tracking-muted);
+  color: var(--app-text-muted);
   font-size: 12px;
 }
 
 .settings-export-dialog-detail strong {
-  color: var(--tracking-text);
+  color: var(--app-text-default);
   font-weight: 600;
   overflow-wrap: anywhere;
 }
@@ -1139,10 +1236,10 @@ textarea:focus {
   justify-content: center;
   width: 28px;
   height: 28px;
-  border: 1px solid #b9d2ec;
+  border: 1px solid var(--app-editor-header-border);
   border-radius: 50%;
-  background: #ffffff;
-  color: #1f2933;
+  background: var(--app-panel-bg);
+  color: var(--app-text-primary);
   font-size: 13px;
   font-weight: 700;
   line-height: 1;
@@ -1151,7 +1248,7 @@ textarea:focus {
 
 .administration-help-button:hover {
   border-color: var(--app-selection-border);
-  background: #f5fbff;
+  background: var(--app-selection-bg);
 }
 
 .administration-status-banner {
@@ -1177,9 +1274,9 @@ textarea:focus {
   display: grid;
   gap: 6px;
   padding: 10px 12px;
-  border: 1px solid #d9dee7;
+  border: 1px solid var(--app-control-border);
   border-radius: 6px;
-  background: #ffffff;
+  background: var(--app-panel-bg);
 }
 
 .administration-validation-summary-item {
@@ -1187,7 +1284,7 @@ textarea:focus {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: baseline;
   gap: 16px;
-  color: #344054;
+  color: var(--app-text-default);
   font-size: 13px;
   line-height: 1.35;
 }
@@ -1197,7 +1294,7 @@ textarea:focus {
 }
 
 .administration-validation-summary-item strong {
-  color: #1f2933;
+  color: var(--app-text-primary);
   font-weight: 700;
   text-align: right;
   font-variant-numeric: tabular-nums;
@@ -1764,6 +1861,7 @@ textarea:focus {
   padding: 12px 14px 10px;
   border-bottom: 1px solid var(--app-modal-header-border);
   background: var(--app-modal-header-bg);
+  color: var(--app-modal-header-text);
 }
 
 .tracking-modal-editor .tracking-modal-header,
@@ -1772,6 +1870,7 @@ textarea:focus {
   padding: 0 14px;
   border-bottom: 1px solid var(--app-editor-header-border);
   background: var(--app-editor-header-bg);
+  color: var(--app-editor-header-text);
   box-shadow: 0 1px 3px var(--app-editor-header-shadow);
   display: flex;
   align-items: center;
@@ -1779,6 +1878,7 @@ textarea:focus {
 
 .tracking-modal-header h3 {
   margin: 0;
+  color: inherit;
   font-size: 14px;
   font-weight: 700;
 }
@@ -1905,7 +2005,7 @@ textarea:focus {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: #eef1f5;
+  background: var(--app-page-bg);
   box-shadow: none;
 }
 
@@ -1951,7 +2051,7 @@ textarea:focus {
   gap: 8px;
   min-height: 34px;
   padding: 0 2px;
-  color: #344054;
+  color: var(--app-text-default);
   font-size: 13px;
 }
 
@@ -2126,7 +2226,7 @@ textarea:focus {
 }
 
 .tasks-hours-danger {
-  color: #b42318;
+  color: var(--app-error-text);
 }
 
 .tasks-editor-timesheet {
@@ -2137,7 +2237,7 @@ textarea:focus {
   min-height: 0;
   overflow: hidden;
   padding: 0;
-  background: #eef1f5;
+  background: var(--app-page-bg);
 }
 
 .tasks-editor-timesheet-header {
@@ -2147,22 +2247,23 @@ textarea:focus {
   justify-content: space-between;
   gap: 12px;
   padding: 0 14px;
-  border-bottom: 1px solid #b9d2ec;
-  background: #dcebf9;
-  box-shadow: 0 1px 3px rgba(28, 85, 135, 0.12);
+  border-bottom: 1px solid var(--app-editor-header-border);
+  background: var(--app-editor-header-bg);
+  color: var(--app-editor-header-text);
+  box-shadow: 0 1px 3px var(--app-editor-header-shadow);
   flex: 0 0 auto;
 }
 
 .tasks-editor-timesheet-header h4 {
   margin: 0;
-  color: #344054;
+  color: inherit;
   font-size: 14px;
   font-weight: 700;
 }
 
 .tasks-editor-timesheet-total {
   margin-left: auto;
-  color: #344054;
+  color: inherit;
   font-size: 12px;
   font-weight: 700;
   text-align: right;
@@ -2175,13 +2276,13 @@ textarea:focus {
 }
 
 .tasks-editor-timesheet-empty {
-  color: #667085;
+  color: var(--app-text-muted);
   padding: 8px 0 2px;
 }
 
 .tasks-editor-timesheet-empty-cell {
   padding: 14px 10px;
-  color: #667085;
+  color: var(--app-text-muted);
   text-align: center;
 }
 
@@ -2191,7 +2292,7 @@ textarea:focus {
   overflow: auto;
   border: 0;
   border-radius: 0;
-  background: #eef1f5;
+  background: var(--app-page-bg);
 }
 
 .tasks-editor-timesheet-table {
@@ -2204,9 +2305,9 @@ textarea:focus {
   position: sticky;
   top: 0;
   z-index: 1;
-  background: #f7f9fc;
-  border-bottom: 1px solid #d9dee7;
-  color: #344054;
+  background: var(--app-table-row-hover-bg);
+  border-bottom: 1px solid var(--app-control-border);
+  color: var(--app-text-default);
   font-size: 12px;
   font-weight: 600;
   padding: 8px 10px;
@@ -2226,8 +2327,8 @@ textarea:focus {
 }
 
 .tasks-editor-timesheet-table tbody td {
-  border-bottom: 1px solid #e5e9f0;
-  color: #344054;
+  border-bottom: 1px solid var(--app-table-row-border);
+  color: var(--app-text-default);
   font-size: 12px;
   font-weight: 400;
   padding: 7px 10px;
@@ -2235,7 +2336,7 @@ textarea:focus {
 }
 
 .tasks-editor-timesheet-table tbody tr:last-child td {
-  border-bottom: 1px solid #d9dee7;
+  border-bottom: 1px solid var(--app-control-border);
 }
 
 .tasks-editor-field-completed {
